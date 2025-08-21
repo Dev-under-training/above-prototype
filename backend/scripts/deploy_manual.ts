@@ -45,6 +45,9 @@ async function main() {
         voterRegistryArtifact.bytecode,
         deployerWallet
     );
+    // Type the deployed instance using the generated TypeChain interface (if available and paths are correct)
+    // import type { VoterRegistry } from "../types/typechain-types";
+    // const voterRegistry = (await voterRegistryFactory.deploy()) as VoterRegistry;
     const voterRegistry = await voterRegistryFactory.deploy();
     await voterRegistry.waitForDeployment();
     const voterRegistryAddress = await voterRegistry.getAddress();
@@ -58,6 +61,9 @@ async function main() {
         deployerWallet
     );
     // Pass the deployed VoterRegistry address to the ABOVEBallot constructor
+    // Type the deployed instance using the generated TypeChain interface (if available and paths are correct)
+    // import type { ABOVEBallot } from "../types/typechain-types";
+    // const aboveBallot = (await aboveBallotFactory.deploy(voterRegistryAddress)) as ABOVEBallot;
     const aboveBallot = await aboveBallotFactory.deploy(voterRegistryAddress);
     await aboveBallot.waitForDeployment();
     const aboveBallotAddress = await aboveBallot.getAddress();
@@ -67,12 +73,14 @@ async function main() {
     console.log("\n--- Testing VoterRegistry ---");
     // Example interaction: Add deployer as a voter (using the deployed contract instance)
     console.log(`Adding deployer (${deployerAddress}) as a voter...`);
-    const addVoterTx = await voterRegistry.connect(deployerWallet).addVoter(deployerAddress);
+    // Cast to any to avoid potential typing issues if TypeChain paths are problematic in VS Code
+    const typedVoterRegistry: any = voterRegistry;
+    const addVoterTx = await typedVoterRegistry.connect(deployerWallet).addVoter(deployerAddress);
     const addVoterReceipt = await addVoterTx.wait();
     console.log(`Voter added in tx: ${addVoterReceipt?.hash}`);
 
     // Check if deployer is allowed
-    const isDeployerAllowed = await voterRegistry.isAllowed(deployerAddress);
+    const isDeployerAllowed = await typedVoterRegistry.isAllowed(deployerAddress);
     console.log(`Is deployer (${deployerAddress}) allowed? ${isDeployerAllowed}`);
 
     console.log("\n--- Deployment and Basic Interaction Complete ---");
