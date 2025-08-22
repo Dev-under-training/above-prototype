@@ -1,60 +1,87 @@
-// frontend/src/components/VoterStatus.tsx
-import React from 'react';
-// Import Wagmi hooks
-import { useAccount, useReadContract } from 'wagmi';
-// Import contract configuration
-import { CONTRACT_ADDRESSES, VOTER_REGISTRY_ABI } from '../contracts/contractConfig';
+// src/components/VoterStatus.tsx
+import React, { useState } from 'react';
+import { useAccount } from 'wagmi';
+import { useVoterRegistry } from '../hooks/useVoterRegistry';
+import { isAddress } from 'viem'; // Utility to validate Ethereum addresses
 
+/**
+ * Component to display voter registration status and provide owner controls.
+ */
 const VoterStatus: React.FC = () => {
-  // Get the connected wallet account information
-  const { address, isConnected, isConnecting } = useAccount();
+  const { address: userAddress, isConnected } = useAccount();
+  const {
+    isAllowed,
+    isCheckingAllowed,
+    isAllowedError,
+    allowedError,
+    handleAddVoter,
+    isAddingVoter,
+    isAddVoterSuccess,
+    isAddVoterError,
+    addVoterError,
+  } = useVoterRegistry();
 
-  // Use the useReadContract hook to call the 'isAllowed' function on VoterRegistry
-  // This hook automatically refetches data when the address or contract changes
-  const { data: isAllowed, isError, isLoading } = useReadContract({ // Renamed data to isAllowed for clarity
-    address: CONTRACT_ADDRESSES.voterRegistry, // Use the address from config
-    abi: VOTER_REGISTRY_ABI,                  // Use the ABI from config
-    functionName: 'isAllowed',                // The function to call
-    // Pass address only if it's defined (non-null and non-undefined)
-    // The 'as const' assertion helps TypeScript understand the tuple type correctly
-    args: address ? [address] : undefined,    // Pass [address] if connected, otherwise undefined
-    // Only run the query if the user is connected AND an address is available
-    query: {
-      enabled: isConnected && !!address, // !!address converts address to a boolean (true if defined, false if undefined/null)
-    },
-  });
+  const [voterToAdd, setVoterToAdd] = useState<string>(''); // State for the input field
+  const [addVoterMessage, setAddVoterMessage] = useState<string>(''); // State for feedback message
 
-  // Render different UI based on the state
-  if (isConnecting) {
-    return <div>Connecting wallet...</div>;
-  }
+  const handleAddVoterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddVoterMessage(''); // Clear previous message
+
+    if (!isAddress(voterToAdd)) {
+      setAddVoterMessage('Invalid Ethereum address.');
+      return;
+    }
+
+    // Call the handleAddVoter function from the hook
+    handleAddVoter(voterToAdd as `0x${string}`);
+    // Reset the input field
+    setVoterToAdd('');
+  };
 
   if (!isConnected) {
-    return <div>Please connect your wallet.</div>;
-  }
-
-  if (isLoading) {
-    return <div>Checking voter status...</div>;
-  }
-
-  if (isError) {
-    return <div>Error checking voter status. Please try again.</div>;
-  }
-
-  // If data is successfully fetched
-  // Add a check to ensure isAllowed is defined (though enabled: true should guarantee this)
-  if (isAllowed === undefined) {
-      // This case should ideally not happen due to `enabled: isConnected && !!address`,
-      // but it's good defensive programming.
-      return <div>Unexpected state: Voter status check completed but result is undefined.</div>;
+    return (
+      <div className="voter-status">
+        <p>Please connect your wallet to check voter status.</p>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <p>Connected Wallet: {address}</p>
-      <p>
-        Voter Status: <strong>{isAllowed ? 'Registered Voter' : 'Not Registered'}</strong>
-      </p>
+    <div className="voter-status">
+      <h3>Voter Status</h3>
+      {isCheckingAllowed ? (
+        <p>Checking if you are registered...</p>
+      ) : isAllowedError ? (
+        <p>Error checking voter status: {allowedError?.message}</p>
+      ) : (
+        <p>
+          <strong>Registered Voter:</strong> {isAllowed ? 'Yes' : 'No'}
+        </p>
+      )}
+
+      {/* Owner Controls (Placeholder for simplicity) */}
+      {/* In a real app, you'd check if the connected address is the owner */}
+      <details>
+        <summary>Owner Controls (Add Voter)</summary>
+        <form onSubmit={handleAddVoterSubmit}>
+          <label htmlFor="voterAddress">Voter Address:</label>
+          <input
+            type="text"
+            id="voterAddress"
+            value={voterToAdd}
+            onChange={(e) => setVoterToAdd(e.target.value)}
+            placeholder="0x..."
+            required
+          />
+          <button type="submit" disabled={isAddingVoter}>
+            {isAddingVoter ? 'Adding...' : 'Add Voter'}
+          </button>
+        </form>
+        {isAddVoterSuccess && <p>Voter added successfully!</p>}
+        {isAddVoterError && <p>Error adding voter: {addVoterError?.message}</p>}
+        {addVoterMessage && <p>{addVoterMessage}</p>}
+      </details>
     </div>
   );
 };

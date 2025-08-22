@@ -1,6 +1,80 @@
 /* src/App.css */
-.app-container {
-  text-align: center;
-  margin-top: 50px;
-  font-family: Arial, sans-serif;
+/* ... (previous CSS rules) ... */
+
+/* Wallet Status Styles */
+.wallet-status {
+  margin: 20px 0;
+  padding: 15px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+  text-align: left;
+  display: inline-block;
+  max-width: 90%;
+  word-break: break-all;
 }
+
+.wallet-status p {
+  margin: 5px 0;
+}
+
+/* Voter Status Styles */
+.voter-status {
+  margin: 20px 0;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #fafafa;
+  text-align: left;
+}
+
+.voter-status h3 {
+  margin-top: 0;
+}
+
+.voter-status form {
+  margin-top: 10px;
+}
+
+.voter-status label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.voter-status input {
+  padding: 8px;
+  margin-right: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.voter-status button {
+  padding: 8px 16px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.voter-status button:hover {
+  background-color: #2980b9;
+}
+
+.voter-status button:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.voter-status details {
+  margin-top: 15px;
+}
+
+.voter-status summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* --- End of new component styles --- */
+
+/* ... (rest of the CSS rules) ... */
