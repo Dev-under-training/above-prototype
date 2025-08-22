@@ -37,6 +37,31 @@ contract VoterRegistry is Ownable {
         emit VoterAdded(_voter);
     }
 
+    // --- Batch Add Voters ---
+    /**
+     * @dev Adds multiple voter addresses to the allowed list in a single transaction.
+     *      Only the contract owner can call this function.
+     * @param _voters An array of addresses of the voters to be added.
+     */
+    function addVoters(address[] calldata _voters) external onlyOwner {
+        // Iterate through the provided list of addresses
+        for (uint256 i = 0; i < _voters.length; i++) {
+            address voter = _voters[i];
+
+            // Apply the same checks as addVoter
+            require(voter != address(0), "VoterRegistry: Invalid voter address in batch");
+            require(!_allowedVoters[voter], "VoterRegistry: Voter already registered in batch");
+
+            // Add the voter if checks pass
+            _allowedVoters[voter] = true;
+            allowedVoterCount += 1;
+            // It's generally not recommended to emit events inside loops for gas costs,
+            // but for an owner-only function and manageable batch sizes, it's acceptable
+            // for UI updates. Consider if emitting one event for the whole batch is preferred.
+            emit VoterAdded(voter);
+        }
+    }
+
     /**
      * @dev Checks if an address is on the allowed voter list.
      * @param _voter The address to check.
