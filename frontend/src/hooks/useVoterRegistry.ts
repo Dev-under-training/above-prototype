@@ -1,6 +1,7 @@
 // src/hooks/useVoterRegistry.ts
 import { useReadContract, useWriteContract, useAccount } from 'wagmi';
 import { CONTRACT_ADDRESSES, VOTER_REGISTRY_ABI } from '../contracts/contractConfig';
+import { isAddress } from 'viem'; // Utility to validate Ethereum addresses
 
 /**
  * Custom hook for interacting with the VoterRegistry contract.
@@ -21,7 +22,7 @@ export const useVoterRegistry = () => {
    *   - error: Error object (if an error occurred)
    */
   const {
-    data: isAllowed,
+    data: isAllowed, // Destructure 'data' and rename it to 'isAllowed' for clarity
     isLoading: isCheckingAllowed,
     isError: isAllowedError,
     error: allowedError,
@@ -44,7 +45,7 @@ export const useVoterRegistry = () => {
    *   - error: Error object
    */
   const {
-    data: allowedVoterCount,
+    data: allowedVoterCount, // Destructure 'data' and rename it to 'allowedVoterCount'
     isLoading: isFetchingVoterCount,
     isError: isVoterCountError,
     error: voterCountError,
@@ -73,6 +74,11 @@ export const useVoterRegistry = () => {
    * @param voterAddress The address of the voter to add.
    */
   const handleAddVoter = (voterAddress: `0x${string}`) => {
+    if (!isAddress(voterAddress)) {
+       console.error("Invalid address provided to handleAddVoter:", voterAddress);
+       // Optionally, set an error state in your component
+       return;
+    }
     addVoter({
       address: CONTRACT_ADDRESSES.voterRegistry,
       abi: VOTER_REGISTRY_ABI,
@@ -81,23 +87,62 @@ export const useVoterRegistry = () => {
     });
   };
 
+   // --- NEW: Batch Add Voters Function ---
+  const {
+    writeContract: addVoters, // Renamed for clarity
+    isPending: isAddingVoters,
+    isSuccess: isAddVotersSuccess,
+    isError: isAddVotersError,
+    error: addVotersError,
+  } = useWriteContract();
+
+  /**
+   * Function to trigger the batch addVoters transaction.
+   * @param voterAddresses An array of Ethereum addresses to add.
+   */
+  const handleAddVoters = (voterAddresses: `0x${string}`[]) => {
+    // Basic client-side validation
+    const invalidAddresses = voterAddresses.filter(addr => !isAddress(addr));
+    if (invalidAddresses.length > 0) {
+      console.error("Invalid addresses found in batch:", invalidAddresses);
+      // Optionally, set an error state in your component
+      return;
+    }
+
+    addVoters({
+      address: CONTRACT_ADDRESSES.voterRegistry,
+      abi: VOTER_REGISTRY_ABI,
+      functionName: 'addVoters',
+      args: [voterAddresses], // Pass the array of addresses
+    });
+  };
+  // --- END NEW: Batch Add Voters Function ---
+
+
   // --- Return Values ---
   return {
-    // Read data
+    // Read data (Apply default values here after destructuring)
     isAllowed: isAllowed ?? false, // Default to false if undefined
     isCheckingAllowed,
     isAllowedError,
     allowedError,
-    allowedVoterCount: allowedVoterCount ?? 0n, // Default to 0 if undefined
+    allowedVoterCount: allowedVoterCount ?? 0n, // Default to 0n if undefined
     isFetchingVoterCount,
     isVoterCountError,
     voterCountError,
 
-    // Write functions and state
+    // Write functions and state (Single Add)
     handleAddVoter,
     isAddingVoter,
     isAddVoterSuccess,
     isAddVoterError,
     addVoterError,
+
+    // Write functions and state (Batch Add)
+    handleAddVoters, // New function
+    isAddingVoters,   // New state
+    isAddVotersSuccess, // New state
+    isAddVotersError,   // New state
+    addVotersError,     // New error
   };
 };
