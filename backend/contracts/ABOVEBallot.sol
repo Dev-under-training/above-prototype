@@ -23,6 +23,10 @@ contract ABOVEBallot is Ownable {
     mapping(address => bool) public hasVoted;
     uint256 public totalVotesCast;
 
+    // --- Campaign Description ---
+    string public campaignDescription;
+    // --- End Campaign Description ---
+
     // --- Basic Voting Campaign ---
     string[] public basicChoices;
     mapping(uint256 => uint256) public basicChoiceVotes;
@@ -58,6 +62,9 @@ contract ABOVEBallot is Ownable {
     event BallotCampaignFinalized();
     event VoteCastBasic(address indexed voter, uint256[] selectedChoices);
     event VoteCastBallot(address indexed voter, uint256[] selectedCandidates);
+    // --- NEW Event ---
+    event CampaignDescriptionSet(string description);
+    // --- End NEW Event ---
 
     // --- Modifiers ---
     modifier onlyIfNotVoted() {
@@ -92,6 +99,20 @@ contract ABOVEBallot is Ownable {
         voterRegistry = _voterRegistryAddress;
         currentCampaignType = CampaignType.Undefined;
     }
+
+    // --- Campaign Description Function ---
+
+    /**
+     * @dev Sets the description for the voting campaign.
+     *      Only the owner can call this function.
+     *      Can be called at any time.
+     * @param _description The description of the campaign.
+     */
+    function setCampaignDescription(string calldata _description) external onlyOwner {
+        campaignDescription = _description;
+        emit CampaignDescriptionSet(_description);
+    }
+
 
     // --- Basic Voting Functions ---
 
