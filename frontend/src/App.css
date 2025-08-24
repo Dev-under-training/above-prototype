@@ -1,5 +1,30 @@
 /* src/App.css */
-/* ... (previous CSS rules) ... */
+
+.app-container {
+  text-align: center;
+  margin: 40px auto;
+  max-width: 800px;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+}
+
+.main-header {
+  font-size: 3em;
+  margin-bottom: 0.5em;
+  color: #2c3e50;
+}
+
+.sub-header {
+  font-size: 1.2em;
+  color: #7f8c8d;
+  margin-top: 0;
+  margin-bottom: 2em;
+}
+
+.wallet-connect-button {
+  margin: 20px 0;
+}
 
 /* Wallet Status Styles */
 .wallet-status {
@@ -75,6 +100,79 @@
   font-weight: bold;
 }
 
-/* --- End of new component styles --- */
+/* Campaign Display Styles */
+.campaign-display {
+  margin: 20px 0;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+  text-align: left;
+}
 
-/* ... (rest of the CSS rules) ... */
+.campaign-display h3 {
+  margin-top: 0;
+}
+
+.choices-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+}
+
+.choices-table th,
+.choices-table td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: left;
+}
+
+.choices-table th {
+  background-color: #f2f2f2;
+}
+
+.positions-list {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+.positions-list li {
+  margin-bottom: 15px;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 5px;
+  background-color: #fff;
+}
+
+.positions-list li strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.candidates-list {
+  list-style-type: none;
+  padding-left: 20px;
+  margin: 5px 0;
+}
+
+.candidates-list li {
+  margin-bottom: 5px;
+}
+
+.vote-count {
+  font-size: 0.9em;
+  color: #666;
+}
+
+/* Voting Interface Placeholder Styles */
+.voting-interface-section {
+  margin: 30px 0;
+  padding: 15px;
+  border-top: 1px solid #eee;
+}
+
+.voting-interface-section h2 {
+  color: #333;
+}
+
+/* --- End of component styles --- */
