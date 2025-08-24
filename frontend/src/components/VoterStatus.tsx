@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { useVoterRegistry } from '../hooks/useVoterRegistry';
+import { useABOVEBallot } from '../hooks/useABOVEBallot'; // Import the new hook
 import { isAddress } from 'viem';
 
 const VoterStatus: React.FC = () => {
@@ -25,6 +26,16 @@ const VoterStatus: React.FC = () => {
     addVotersError,
   } = useVoterRegistry();
 
+  // --- NEW: Destructure description functions and state from useABOVEBallot ---
+  const {
+    handleSetCampaignDescription,
+    isSettingDescription,
+    isSetDescriptionSuccess,
+    isSetDescriptionError,
+    setDescriptionError,
+  } = useABOVEBallot();
+  // --- END NEW ---
+
   // State for single add
   const [voterToAdd, setVoterToAdd] = useState<string>('');
   const [addVoterMessage, setAddVoterMessage] = useState<string>('');
@@ -32,6 +43,11 @@ const VoterStatus: React.FC = () => {
   // State for batch add
   const [votersToAddBatch, setVotersToAddBatch] = useState<string>('');
   const [addVotersBatchMessage, setAddVotersBatchMessage] = useState<string>('');
+
+  // --- NEW: State for campaign description input ---
+  const [descriptionInput, setDescriptionInput] = useState<string>('');
+  const [setDescriptionMessage, setSetDescriptionMessage] = useState<string>(''); // For general messages/errors
+  // --- END NEW ---
 
   // --- Single Add Handler ---
   const handleAddVoterSubmit = (e: React.FormEvent) => {
@@ -66,19 +82,35 @@ const VoterStatus: React.FC = () => {
     });
 
     if (invalidAddresses.length > 0) {
-        setAddVotersBatchMessage(`Invalid addresses found: ${invalidAddresses.join(', ')}`);
-        return;
+      setAddVotersBatchMessage(`Invalid addresses found: ${invalidAddresses.join(', ')}`);
+      return;
     }
 
     if (validAddresses.length === 0) {
-        setAddVotersBatchMessage('No valid addresses found.');
-        return;
+      setAddVotersBatchMessage('No valid addresses found.');
+      return;
     }
 
     handleAddVoters(validAddresses);
     setVotersToAddBatch(''); // Clear the input field on success attempt
   };
-  // --- End Handlers ---
+
+  // --- NEW: Handler for Setting Campaign Description ---
+  const handleSetDescriptionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetDescriptionMessage(''); // Clear previous messages
+
+    if (!descriptionInput.trim()) {
+      setSetDescriptionMessage('Description cannot be empty.');
+      return;
+    }
+
+    // Call the function from the hook
+    handleSetCampaignDescription(descriptionInput);
+    // Note: We don't clear the input here, as the user might want to edit/re-submit.
+    // Clearing can be done on success if desired.
+  };
+  // --- END NEW ---
 
   if (!isConnected) {
     return (
@@ -103,7 +135,7 @@ const VoterStatus: React.FC = () => {
 
       {/* Owner Controls */}
       <details>
-        <summary>Owner Controls (Add Voter(s))</summary>
+        <summary>Owner Controls (Add Voter(s) & Set Description)</summary> {/* Updated summary */}
 
         {/* Single Add Form */}
         <h4>Add Single Voter</h4>
@@ -146,6 +178,39 @@ const VoterStatus: React.FC = () => {
         {isAddVotersSuccess && <p>Batch of voters added successfully!</p>}
         {isAddVotersError && <p>Error adding batch of voters: {addVotersError?.message}</p>}
         {addVotersBatchMessage && <p style={{ color: 'red' }}>{addVotersBatchMessage}</p>}
+
+        {/* --- NEW: Set Campaign Description Form --- */}
+        <h4 style={{ marginTop: '20px' }}>Set Campaign Description</h4>
+        <form onSubmit={handleSetDescriptionSubmit}>
+          <label htmlFor="campaignDescription">Description:</label>
+          <textarea
+            id="campaignDescription"
+            value={descriptionInput}
+            onChange={(e) => setDescriptionInput(e.target.value)}
+            placeholder="Provide details about this voting campaign..."
+            rows={4}
+            cols={50}
+            required
+          />
+          <button type="submit" disabled={isSettingDescription}>
+            {isSettingDescription ? 'Setting Description...' : 'Set Description'}
+          </button>
+        </form>
+        {/* Display status messages for setting description */}
+        {isSetDescriptionSuccess && (
+          <p style={{ color: 'green' }}>
+            Campaign description set successfully!
+          </p>
+        )}
+        {isSetDescriptionError && (
+          <p style={{ color: 'red' }}>
+            Error setting campaign description: {setDescriptionError?.message}
+          </p>
+        )}
+        {setDescriptionMessage && (
+          <p style={{ color: 'orange' }}>{setDescriptionMessage}</p>
+        )}
+        {/* --- END NEW --- */}
 
       </details>
     </div>

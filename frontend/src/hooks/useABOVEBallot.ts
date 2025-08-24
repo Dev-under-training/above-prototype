@@ -1,6 +1,7 @@
 // src/hooks/useABOVEBallot.ts
 import { useReadContract, useWriteContract, useAccount } from 'wagmi';
 import { CONTRACT_ADDRESSES, ABOVE_BALLOT_ABI } from '../contracts/contractConfig';
+import { type Address } from 'viem'; // Import Address type
 
 // Define TypeScript types for the complex return structures from the contract
 // These match the structs defined in your Solidity contract
@@ -39,7 +40,7 @@ export const useABOVEBallot = () => {
     address: CONTRACT_ADDRESSES.aboveBallot,
     abi: ABOVE_BALLOT_ABI,
     functionName: 'voterRegistry',
-  });
+  }) as unknown as { data: Address | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
 
   /**
    * Checks if the connected address has already voted.
@@ -57,7 +58,7 @@ export const useABOVEBallot = () => {
     query: {
       enabled: !!userAddress,
     },
-  });
+  }) as unknown as { data: boolean | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
 
   /**
    * Gets the total number of votes cast so far.
@@ -71,7 +72,7 @@ export const useABOVEBallot = () => {
     address: CONTRACT_ADDRESSES.aboveBallot,
     abi: ABOVE_BALLOT_ABI,
     functionName: 'totalVotesCast',
-  });
+  }) as unknown as { data: bigint | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
 
   /**
    * Gets the current type of active campaign.
@@ -85,7 +86,7 @@ export const useABOVEBallot = () => {
     address: CONTRACT_ADDRESSES.aboveBallot,
     abi: ABOVE_BALLOT_ABI,
     functionName: 'currentCampaignType',
-  });
+  }) as unknown as { data: CampaignType | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
 
   /**
    * Checks if the basic campaign is set.
@@ -99,7 +100,7 @@ export const useABOVEBallot = () => {
     address: CONTRACT_ADDRESSES.aboveBallot,
     abi: ABOVE_BALLOT_ABI,
     functionName: 'isBasicCampaignSet',
-  });
+  }) as unknown as { data: boolean | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
 
   /**
    * Checks if the basic campaign is single vote only.
@@ -116,7 +117,7 @@ export const useABOVEBallot = () => {
     query: {
       enabled: !!isBasicCampaignSet, // Only fetch if a basic campaign is set
     },
-  });
+  }) as unknown as { data: boolean | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
 
   /**
    * Fetches basic campaign choices and their current vote counts.
@@ -134,7 +135,12 @@ export const useABOVEBallot = () => {
     query: {
       enabled: currentCampaignType === 1, // Only fetch if current campaign is Basic (1)
     },
-  });
+  }) as unknown as {
+    data: readonly [readonly string[], readonly bigint[]] | undefined;
+    isLoading: boolean;
+    isError: boolean;
+    error: Error | null;
+  }; // Explicit typing for tuple return
 
   /**
    * Checks if the ballot campaign is finalized.
@@ -148,7 +154,7 @@ export const useABOVEBallot = () => {
     address: CONTRACT_ADDRESSES.aboveBallot,
     abi: ABOVE_BALLOT_ABI,
     functionName: 'isBallotCampaignFinalized',
-  });
+  }) as unknown as { data: boolean | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
 
   /**
    * Fetches ballot campaign positions, candidates, and their current vote counts.
@@ -166,7 +172,29 @@ export const useABOVEBallot = () => {
     query: {
       enabled: currentCampaignType === 2 && isBallotCampaignFinalized, // Only fetch if current campaign is Ballot (2) and finalized
     },
-  });
+  }) as unknown as {
+    data: readonly [readonly Position[], readonly Candidate[], readonly bigint[]] | undefined;
+    isLoading: boolean;
+    isError: boolean;
+    error: Error | null;
+  }; // Explicit typing for tuple return
+
+  // --- NEW: Read Campaign Description ---
+  /**
+   * Fetches the campaign description.
+   * @returns The campaign description string.
+   */
+  const {
+    data: campaignDescription,
+    isLoading: isFetchingDescription,
+    isError: isDescriptionError,
+    error: descriptionError,
+  } = useReadContract({
+    address: CONTRACT_ADDRESSES.aboveBallot,
+    abi: ABOVE_BALLOT_ABI,
+    functionName: 'campaignDescription',
+  }) as unknown as { data: string | undefined; isLoading: boolean; isError: boolean; error: Error | null }; // Explicit typing
+  // --- END NEW ---
 
   // --- Write Functions ---
 
@@ -218,10 +246,36 @@ export const useABOVEBallot = () => {
     });
   };
 
+  // --- NEW: Write Function for Setting Description ---
+  /**
+   * Prepares the write contract hook for setting the campaign description.
+   */
+  const {
+    writeContract: setCampaignDescription, // Renamed for clarity
+    isPending: isSettingDescription,
+    isSuccess: isSetDescriptionSuccess,
+    isError: isSetDescriptionError,
+    error: setDescriptionError,
+  } = useWriteContract();
+
+  /**
+   * Function to trigger the setCampaignDescription transaction.
+   * @param description The new campaign description.
+   */
+  const handleSetCampaignDescription = (description: string) => {
+    setCampaignDescription({
+      address: CONTRACT_ADDRESSES.aboveBallot,
+      abi: ABOVE_BALLOT_ABI,
+      functionName: 'setCampaignDescription',
+      args: [description],
+    });
+  };
+  // --- END NEW ---
+
   // --- Return Values ---
   return {
     // Read data
-    voterRegistryAddress,
+    voterRegistryAddress: voterRegistryAddress ?? '0x0000000000000000000000000000000000000000', // Default to zero address
     isFetchingVoterRegistry,
     isVoterRegistryError,
     voterRegistryError,
@@ -271,6 +325,13 @@ export const useABOVEBallot = () => {
     isBallotResultsError,
     ballotResultsError,
 
+    // --- NEW: Campaign Description ---
+    campaignDescription: campaignDescription ?? '', // Default to empty string
+    isFetchingDescription,
+    isDescriptionError,
+    descriptionError,
+    // --- END NEW ---
+
     // Write functions and state
     handleVoteBasic,
     isVotingBasic,
@@ -283,5 +344,13 @@ export const useABOVEBallot = () => {
     isVoteBallotSuccess,
     isVoteBallotError,
     voteBallotError,
+
+    // --- NEW: Set Description Functions and State ---
+    handleSetCampaignDescription, // New function
+    isSettingDescription,        // New state
+    isSetDescriptionSuccess,     // New state
+    isSetDescriptionError,       // New state
+    setDescriptionError,         // New error
+    // --- END NEW ---
   };
 };
