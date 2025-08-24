@@ -1,9 +1,12 @@
 // src/App.tsx
 import './App.css';
 import { AppKitButton } from '@reown/appkit/react';
-import WalletStatus from './components/WalletStatus'; // Import the new component
-import VoterStatus from './components/VoterStatus'; // Import the new component
-import CampaignDisplay from './components/CampaignDisplay'; // Import the new component
+import WalletStatus from './components/WalletStatus';
+import VoterStatus from './components/VoterStatus';
+import CampaignDisplay from './components/CampaignDisplay';
+// --- Import the new VotingInterface component ---
+import VotingInterface from './components/VotingInterface';
+// --- End Import ---
 
 function App() {
   return (
@@ -25,11 +28,10 @@ function App() {
       {/* Campaign Display Component */}
       <CampaignDisplay />
 
-      {/* Placeholder for Voting Interface */}
-      <div className="voting-interface-section">
-        <h2>Voting Interface</h2>
-        <p>Voting interface will appear here based on the active campaign type.</p>
-      </div>
+      {/* --- Voting Interface Component --- */}
+      <VotingInterface />
+      {/* --- End Voting Interface Component --- */}
+
     </div>
   );
 }
