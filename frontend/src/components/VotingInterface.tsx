@@ -1,19 +1,21 @@
-// src/components/VotingInterface.tsx
+// frontend/src/components/VotingInterface.tsx
 import React, { useState, useEffect } from 'react';
 import { useABOVEBallot } from '../hooks/useABOVEBallot';
 
-const VotingInterface: React.FC = () => {
+/**
+ * Props for the VotingInterface component.
+ */
+interface VotingInterfaceProps {
+  campaignId: bigint | null; // Accept campaignId as a prop
+}
+
+const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
+  // Pass the campaignId to the hook
   const {
-    currentCampaignType,
-    isBasicCampaignSet,
-    isBasicSingleVote,
-    basicChoices,
-    // isFetchingBasicResults, // Might be useful for loading state
-    isBallotCampaignFinalized,
-    ballotPositions,
-    ballotCandidates,
-    // isFetchingBallotResults, // Might be useful for loading state
-    hasVoted,
+    campaign, // Get campaign metadata to check status
+    hasVoted, // Check vote status for this specific campaign/user
+    isCheckingVoteStatus,
+    isVoteStatusError,
     // --- Voting Functions ---
     handleVoteBasic,
     isVotingBasic,
@@ -25,10 +27,21 @@ const VotingInterface: React.FC = () => {
     isVoteBallotSuccess,
     isVoteBallotError,
     voteBallotError,
-    // --- Refetch Functions (Potentially useful for real-time updates) ---
-    // refetchBasicResults, // Assuming your hook exposes these or you use queryClient
-    // refetchBallotResults,
-  } = useABOVEBallot();
+    // --- Data needed for Voting UI ---
+    isBasicSingleVote,
+    basicChoices,
+    ballotPositions,
+    ballotCandidates,
+    isFetchingCampaign,
+    isCampaignError,
+    campaignError,
+    isFetchingBasicResults,
+    isBasicResultsError,
+    basicResultsError,
+    isFetchingBallotResults,
+    isBallotResultsError,
+    ballotResultsError
+  } = useABOVEBallot(campaignId); // Pass campaignId to the hook
 
   // --- State for Basic Voting ---
   const [selectedBasicChoices, setSelectedBasicChoices] = useState<number[]>([]);
@@ -41,32 +54,19 @@ const VotingInterface: React.FC = () => {
   const [generalMessage, setGeneralMessage] = useState<string>('');
 
   // --- Effect to handle successful vote submission ---
-  // This can trigger UI updates or data refetching
   useEffect(() => {
     if (isVoteBasicSuccess || isVoteBallotSuccess) {
-      // Optionally, show a success message
       setGeneralMessage('Vote submitted successfully!');
       // Clear selections
       setSelectedBasicChoices([]);
       setSelectedBallotChoices({});
-      // Invalidate/Refetch queries related to results to update the display
-      // This depends on how your useABOVEBallot hook is set up.
-      // Example using queryClient (requires importing it):
-      /*
-      queryClient.invalidateQueries({ queryKey: ['aboveBallot', 'getBasicResults'] });
-      queryClient.invalidateQueries({ queryKey: ['aboveBallot', 'getBallotResults'] });
-      queryClient.invalidateQueries({ queryKey: ['aboveBallot', 'totalVotesCast'] });
-      queryClient.invalidateQueries({ queryKey: ['aboveBallot', 'hasVoted'] }); // If needed
-      */
-      // Or, if your hook exposes refetch functions:
-      // refetchBasicResults?.();
-      // refetchBallotResults?.();
+      // Note: Consider refetching campaign data or results if needed for real-time updates
     }
-  }, [isVoteBasicSuccess, isVoteBallotSuccess]); // Dependencies
+  }, [isVoteBasicSuccess, isVoteBallotSuccess]);
 
   // --- Handler for Basic Voting Selection ---
   const handleBasicChoiceToggle = (index: number) => {
-    if (hasVoted) return; // Prevent changes if already voted
+    if (!campaignId || !campaign || !campaign.isActive || hasVoted || isVotingBasic) return; // Prevent changes if conditions aren't met
 
     if (isBasicSingleVote) {
       // Radio button behavior: only one selection allowed
@@ -87,7 +87,7 @@ const VotingInterface: React.FC = () => {
 
   // --- Handler for Ballot Voting Selection ---
   const handleBallotCandidateToggle = (positionIndex: number, candidateIndex: number) => {
-    if (hasVoted) return; // Prevent changes if already voted
+     if (!campaignId || !campaign || !campaign.isActive || !campaign.isFinalized || hasVoted || isVotingBallot) return;
 
     const position = ballotPositions[positionIndex];
     const currentSelectionsForPosition = selectedBallotChoices[positionIndex] || [];
@@ -101,8 +101,9 @@ const VotingInterface: React.FC = () => {
         newSelections[positionIndex] = currentSelections.filter(i => i !== candidateIndex);
       } else {
         // Check if max selections are reached
+        // Ensure comparison is between numbers (hook likely converts bigint to number)
         if (currentSelections.length >= position.maxSelections) {
-          setGeneralMessage(`You can only select up to ${position.maxSelections} candidate(s) for ${position.name}.`);
+          setGeneralMessage(`You can only select up to ${position.maxSelections.toString()} candidate(s) for ${position.name}.`);
           return prev; // Don't update selection
         }
         // Select
@@ -118,8 +119,20 @@ const VotingInterface: React.FC = () => {
     e.preventDefault();
     setGeneralMessage('');
 
+    if (!campaignId) {
+      setGeneralMessage('No campaign selected.');
+      return;
+    }
+    if (!campaign) {
+       setGeneralMessage('Campaign data unavailable.');
+       return;
+    }
+    if (!campaign.isActive) {
+       setGeneralMessage('This campaign is not active for voting.');
+       return;
+    }
     if (hasVoted) {
-      setGeneralMessage('You have already voted.');
+      setGeneralMessage('You have already voted in this campaign.');
       return;
     }
 
@@ -138,8 +151,24 @@ const VotingInterface: React.FC = () => {
     e.preventDefault();
     setGeneralMessage('');
 
+     if (!campaignId) {
+      setGeneralMessage('No campaign selected.');
+      return;
+    }
+    if (!campaign) {
+       setGeneralMessage('Campaign data unavailable.');
+       return;
+    }
+    if (!campaign.isActive) {
+       setGeneralMessage('This campaign is not active for voting.');
+       return;
+    }
+    if (!campaign.isFinalized) {
+        setGeneralMessage('This ballot campaign is not yet finalized.');
+        return;
+    }
     if (hasVoted) {
-      setGeneralMessage('You have already voted.');
+      setGeneralMessage('You have already voted in this campaign.');
       return;
     }
 
@@ -165,12 +194,41 @@ const VotingInterface: React.FC = () => {
 
   // --- Render Logic ---
 
-  // If no campaign is set or not finalized, show nothing or a placeholder
-  if ((!isBasicCampaignSet && !isBallotCampaignFinalized) || currentCampaignType === 0) {
+  // If no campaign is selected, show nothing or a placeholder
+  if (campaignId === null) {
     return (
       <div className="voting-interface">
         <h3>Voting</h3>
-        <p>No active voting campaign is available at this time.</p>
+        <p>Please select an active campaign to vote.</p>
+      </div>
+    );
+  }
+
+   if (isFetchingCampaign) {
+      return (
+        <div className="voting-interface">
+          <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
+          <p>Loading campaign data...</p>
+        </div>
+      );
+   }
+
+   if (isCampaignError) {
+       console.error("Error fetching campaign:", campaignError);
+       return (
+        <div className="voting-interface">
+          <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
+          <p style={{ color: 'red' }}>Error loading campaign data.</p>
+        </div>
+       );
+   }
+
+  // If campaign data is loading or unavailable, show a message
+  if (!campaign) {
+    return (
+      <div className="voting-interface">
+        <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
+        <p>Campaign data unavailable.</p>
       </div>
     );
   }
@@ -179,46 +237,78 @@ const VotingInterface: React.FC = () => {
   if (hasVoted) {
     return (
       <div className="voting-interface">
-        <h3>Voting</h3>
+        <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
         <p>You have already cast your vote in this campaign.</p>
         <p>Thank you for participating!</p>
       </div>
     );
   }
 
+  // If campaign is not active, show a message
+  if (!campaign.isActive) {
+     return (
+      <div className="voting-interface">
+        <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
+        <p>This campaign is not currently active for voting.</p>
+      </div>
+    );
+  }
+
   // Render Basic Voting Interface
-  if (currentCampaignType === 1 && isBasicCampaignSet) {
+  if (campaign.campaignType === 1) {
+    if (isFetchingBasicResults) {
+       return (
+        <div className="voting-interface">
+          <h3>Cast Your Vote - Basic Campaign (ID: {campaignId.toString()})</h3>
+          <p><em>Loading choices...</em></p>
+        </div>
+      );
+    }
+    if (isBasicResultsError) {
+         console.error("Error fetching basic results:", basicResultsError);
+         return (
+            <div className="voting-interface">
+              <h3>Cast Your Vote - Basic Campaign (ID: {campaignId.toString()})</h3>
+              <p style={{ color: 'red' }}>Error loading campaign choices.</p>
+            </div>
+          );
+    }
+
     return (
       <div className="voting-interface">
-        <h3>Cast Your Vote - Basic Campaign</h3>
+        <h3>Cast Your Vote - Basic Campaign (ID: {campaignId.toString()})</h3>
         <form onSubmit={handleSubmitBasicVote}>
           <fieldset>
             <legend>Select your choice{isBasicSingleVote ? '' : '(s)'}</legend>
-            {basicChoices.map((choice, index) => {
-              const isSelected = selectedBasicChoices.includes(index);
-              return (
-                <div key={index}>
-                  <label>
-                    <input
-                      type={isBasicSingleVote ? "radio" : "checkbox"}
-                      name="basic-vote" // Group name for radio buttons
-                      checked={isSelected}
-                      onChange={() => handleBasicChoiceToggle(index)}
-                      disabled={hasVoted || isVotingBasic}
-                    />
-                    {choice}
-                  </label>
-                </div>
-              );
-            })}
+            {basicChoices.length > 0 ? (
+              basicChoices.map((choice, index) => {
+                const isSelected = selectedBasicChoices.includes(index);
+                return (
+                  <div key={index}>
+                    <label>
+                      <input
+                        type={isBasicSingleVote ? "radio" : "checkbox"}
+                        name="basic-vote" // Group name for radio buttons
+                        checked={isSelected}
+                        onChange={() => handleBasicChoiceToggle(index)}
+                        disabled={hasVoted || isVotingBasic || !campaign.isActive}
+                      />
+                      {choice}
+                    </label>
+                  </div>
+                );
+              })
+            ) : (
+              <p>No choices available for voting.</p>
+            )}
           </fieldset>
-          <button type="submit" disabled={hasVoted || isVotingBasic || selectedBasicChoices.length === 0}>
+          <button type="submit" disabled={hasVoted || isVotingBasic || selectedBasicChoices.length === 0 || !campaign.isActive}>
             {isVotingBasic ? 'Submitting Vote...' : 'Submit Vote'}
           </button>
         </form>
 
         {/* Status Messages */}
-        {generalMessage && <p style={{ color: 'orange' }}>{generalMessage}</p>}
+        {generalMessage && <p style={{ color: generalMessage.includes('successfully') ? 'green' : 'orange' }}>{generalMessage}</p>}
         {isVoteBasicError && <p style={{ color: 'red' }}>Error submitting vote: {voteBasicError?.message}</p>}
         {isVoteBasicSuccess && <p style={{ color: 'green' }}>Vote submitted successfully!</p>}
       </div>
@@ -226,62 +316,99 @@ const VotingInterface: React.FC = () => {
   }
 
   // Render Ballot Voting Interface
-  if (currentCampaignType === 2 && isBallotCampaignFinalized) {
+  if (campaign.campaignType === 2) {
+     if (!campaign.isFinalized) {
+         return (
+          <div className="voting-interface">
+            <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
+            <p>This ballot campaign is not yet finalized and is not open for voting.</p>
+          </div>
+        );
+     }
+
+     if (isFetchingBallotResults) {
+       return (
+        <div className="voting-interface">
+          <h3>Cast Your Vote - Ballot Campaign (ID: {campaignId.toString()})</h3>
+          <p><em>Loading positions and candidates...</em></p>
+        </div>
+      );
+    }
+    if (isBallotResultsError) {
+         console.error("Error fetching ballot results:", ballotResultsError);
+         return (
+            <div className="voting-interface">
+              <h3>Cast Your Vote - Ballot Campaign (ID: {campaignId.toString()})</h3>
+              <p style={{ color: 'red' }}>Error loading campaign positions/candidates.</p>
+            </div>
+          );
+    }
+
     return (
       <div className="voting-interface">
-        <h3>Cast Your Vote - Ballot Campaign</h3>
+        <h3>Cast Your Vote - Ballot Campaign (ID: {campaignId.toString()})</h3>
         <form onSubmit={handleSubmitBallotVote}>
-          {ballotPositions.map((position, posIndex) => {
-            const posIndexNum = Number(posIndex); // Ensure it's a number
-            const candidatesForPosition = ballotCandidates.filter(
-              cand => Number(cand.positionIndex) === posIndexNum
-            );
-            const currentSelectionsForPosition = selectedBallotChoices[posIndexNum] || [];
-            const isAtMaxSelections = currentSelectionsForPosition.length >= position.maxSelections;
+          {ballotPositions.length > 0 ? (
+            ballotPositions.map((position, posIndex) => {
+              const posIndexNum = Number(posIndex); // Ensure it's a number
+              const candidatesForPosition = ballotCandidates.filter(
+                cand => Number(cand.positionIndex) === posIndexNum
+              );
+              const currentSelectionsForPosition = selectedBallotChoices[posIndexNum] || [];
+              const isAtMaxSelections = currentSelectionsForPosition.length >= position.maxSelections;
 
-            return (
-              <fieldset key={posIndex}>
-                <legend>
-                  {position.name} (Select up to {position.maxSelections} candidate{position.maxSelections !== 1 ? 's' : ''})
-                </legend>
-                {candidatesForPosition.length > 0 ? (
-                  candidatesForPosition.map((candidate) => {
-                    const candIndexNum = ballotCandidates.findIndex(
-                      c => c.name === candidate.name && c.positionIndex === candidate.positionIndex
-                    );
-                    const isCandidateSelected = currentSelectionsForPosition.includes(candIndexNum);
+              return (
+                <fieldset key={posIndex}>
+                  <legend>
+                    {/* FIX: Safely handle potential undefined values and ensure correct type comparison */}
+                    {position.name} (Select up to {(position.maxSelections ?? 0).toString()} candidate{(position.maxSelections ?? 0n) !== 1n ? 's' : ''})
+                  </legend>
+                  {candidatesForPosition.length > 0 ? (
+                    candidatesForPosition.map((candidate, candIndex) => {
+                      // Find the original index in the full ballotCandidates array
+                      // This is necessary because selectedBallotChoices uses indices relative to the filtered list
+                      // but we need the global index for the contract call
+                      const globalCandidateIndex = ballotCandidates.findIndex(
+                        c => c.name === candidate.name && c.positionIndex === candidate.positionIndex
+                      );
+                      const isCandidateSelected = currentSelectionsForPosition.includes(candIndex); // Use local index for UI state
 
-                    return (
-                      <div key={candIndexNum}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={isCandidateSelected}
-                            onChange={() => handleBallotCandidateToggle(posIndexNum, candIndexNum)}
-                            disabled={
-                              hasVoted ||
-                              isVotingBallot ||
-                              (!isCandidateSelected && isAtMaxSelections) // Disable if at max and trying to select
-                            }
-                          />
-                          {candidate.name}
-                        </label>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p>No candidates available for this position.</p>
-                )}
-              </fieldset>
-            );
-          })}
-          <button type="submit" disabled={hasVoted || isVotingBallot}>
+                      return (
+                        <div key={candIndex}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={isCandidateSelected}
+                              onChange={() => handleBallotCandidateToggle(posIndexNum, candIndex)} // Pass local index for UI logic
+                              disabled={
+                                hasVoted ||
+                                isVotingBallot ||
+                                !campaign.isActive ||
+                                !campaign.isFinalized ||
+                                (!isCandidateSelected && isAtMaxSelections) // Disable if at max and trying to select
+                              }
+                            />
+                            {candidate.name}
+                          </label>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p>No candidates available for this position.</p>
+                  )}
+                </fieldset>
+              );
+            })
+          ) : (
+            <p>No positions defined for this ballot campaign.</p>
+          )}
+          <button type="submit" disabled={hasVoted || isVotingBallot || !campaign.isActive || !campaign.isFinalized}>
             {isVotingBallot ? 'Submitting Vote...' : 'Submit Vote'}
           </button>
         </form>
 
         {/* Status Messages */}
-        {generalMessage && <p style={{ color: 'orange' }}>{generalMessage}</p>}
+        {generalMessage && <p style={{ color: generalMessage.includes('successfully') ? 'green' : 'orange' }}>{generalMessage}</p>}
         {isVoteBallotError && <p style={{ color: 'red' }}>Error submitting vote: {voteBallotError?.message}</p>}
         {isVoteBallotSuccess && <p style={{ color: 'green' }}>Vote submitted successfully!</p>}
       </div>
@@ -291,7 +418,7 @@ const VotingInterface: React.FC = () => {
   // Fallback if campaign type is somehow unrecognized
   return (
     <div className="voting-interface">
-      <h3>Voting</h3>
+      <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
       <p>Unable to determine the active campaign type.</p>
     </div>
   );
