@@ -76,6 +76,7 @@ contract ABOVEBallot is Ownable {
     event BasicCampaignSet(uint256 indexed campaignId, string[] choices, bool isSingleVote);
     event BallotPositionAdded(uint256 indexed campaignId, uint256 indexed positionIndex, string name, uint8 maxSelections);
     event CandidateAdded(uint256 indexed campaignId, uint256 indexed candidateId, string name, uint256 positionIndex);
+    event CandidatesAdded(uint256 indexed campaignId, uint256 indexed positionIndex, uint256 count); // New event for batch add
     event BallotCampaignFinalized(uint256 indexed campaignId);
     event VoteCastBasic(uint256 indexed campaignId, address indexed voter, uint256[] selectedChoices);
     event VoteCastBallot(uint256 indexed campaignId, address indexed voter, uint256[] selectedCandidates);
@@ -189,9 +190,10 @@ contract ABOVEBallot is Ownable {
     /**
      * @dev Activates a campaign for voting. Only the owner can call this.
      *      Deactivates any currently active campaign.
+     *      NOTE: Activation is now allowed for finalized campaigns (e.g., to reactivate results).
      * @param campaignId The ID of the campaign to activate.
      */
-    function activateCampaign(uint256 campaignId) external onlyOwner onlyValidCampaign(campaignId) onlyUnfinalizedCampaign(campaignId) {
+    function activateCampaign(uint256 campaignId) external onlyOwner onlyValidCampaign(campaignId) /* onlyUnfinalizedCampaign removed */ {
         // Deactivate the currently active campaign, if any
         for (uint256 i = 1; i < _nextCampaignId; i++) {
             if (campaigns[i].isActive) {
@@ -342,6 +344,36 @@ contract ABOVEBallot is Ownable {
         positionsByCampaign[campaignId][_positionIndex].candidateCount += 1;
 
         emit CandidateAdded(campaignId, newCandidateId, _name, _positionIndex);
+    }
+
+    /**
+     * @dev Adds multiple candidates for a specific position in the ballot type campaign. Only the owner can call this.
+     *      Can only be called before the ballot campaign is finalized.
+     * @param campaignId The ID of the campaign.
+     * @param _names An array of names for the candidates.
+     * @param _positionIndex The index of the position these candidates are running for.
+     */
+    function addCandidates(uint256 campaignId, string[] memory _names, uint256 _positionIndex) external
+        onlyOwner
+        onlyValidCampaign(campaignId)
+        onlyUnfinalizedCampaign(campaignId)
+        onlyBallotCampaign(campaignId)
+    {
+        require(_names.length > 0, "ABOVEBallot: Must provide at least one candidate name.");
+        require(_positionIndex < positionsByCampaign[campaignId].length, "ABOVEBallot: Invalid position index.");
+        uint256 initialCandidateCount = candidatesByCampaign[campaignId].length;
+
+        for (uint i = 0; i < _names.length; i++) {
+            require(bytes(_names[i]).length > 0, "ABOVEBallot: Candidate name cannot be empty.");
+            uint256 newCandidateId = candidatesByCampaign[campaignId].length;
+            candidatesByCampaign[campaignId].push(Candidate({name: _names[i], positionIndex: _positionIndex}));
+            // Note: We don't emit CandidateAdded for each in a batch to avoid event spam.
+            // The final count increment and single event emission cover the batch.
+        }
+        positionsByCampaign[campaignId][_positionIndex].candidateCount += uint256(_names.length); // Increment count
+
+        // Emit a single event for the batch
+        emit CandidatesAdded(campaignId, _positionIndex, _names.length);
     }
 
     /**
