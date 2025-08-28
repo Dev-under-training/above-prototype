@@ -1,9 +1,8 @@
 // frontend/src/components/CampaignDisplay.tsx
 import React from 'react';
 import { useABOVEBallot } from '../hooks/useABOVEBallot';
-// Import the CampaignType if you still want to use it, otherwise remove this line and the type annotation below
-// Make sure the path is correct relative to THIS file's location
-import type { CampaignType } from '../hooks/useABOVEBallot'; // Import the type
+// Import specific types if needed and if they are exported from the hook
+// import type { Position, Candidate } from '../hooks/useABOVEBallot';
 
 /**
  * Props for the CampaignDisplay component.
@@ -26,8 +25,8 @@ const CampaignDisplay: React.FC<CampaignDisplayProps> = ({ campaignId }) => {
     isBasicSingleVote, // Fetched based on campaign type and ID
     basicChoices, // Fetched based on campaign type and ID
     basicVotes, // Fetched based on campaign type and ID
-    ballotPositions, // Fetched based on campaign type and ID
-    ballotCandidates, // Fetched based on campaign type and ID
+    ballotPositions, // Fetched based on campaign type and ID (type Position[])
+    ballotCandidates, // Fetched based on campaign type and ID (type Candidate[])
     ballotCandidateVotes, // Fetched based on campaign type and ID
     isFetchingBasicResults,
     isFetchingBallotResults,
@@ -137,7 +136,7 @@ const CampaignDisplay: React.FC<CampaignDisplayProps> = ({ campaignId }) => {
           </thead>
           <tbody>
             {basicChoices.length > 0 ? (
-              basicChoices.map((choice: string, index: number) => { // <-- Explicit types added here
+              basicChoices.map((choice, index) => { // Let TypeScript infer or use string if needed
                 // Ensure index is within bounds for basicVotes
                 const voteCount = index < basicVotes.length ? basicVotes[index] : 0n;
                 return (
@@ -188,23 +187,32 @@ const CampaignDisplay: React.FC<CampaignDisplayProps> = ({ campaignId }) => {
         <h4>Positions & Candidates</h4>
         <ul className="positions-list">
           {ballotPositions.length > 0 ? (
-            ballotPositions.map((position: { name: string; maxSelections: bigint; candidateCount: bigint; }, posIndex: number) => { // <-- Explicit types added here
+            ballotPositions.map((position, posIndex) => { // Use the Position type from hook, let TS infer types for callback params
               // Convert posIndex (number) to bigint for comparison with position fields (bigint)
               const posIndexBigInt = BigInt(posIndex);
-              // Explicitly convert maxSelections to bigint for comparison
-              const maxSelectionsBigint = position.maxSelections; // Already bigint from hook
+              // Access maxSelections. If the hook returns it as number, use it directly for display/comparison.
+              // If you are sure it's bigint from the contract/hook, convert it. Let's assume hook provides correct type.
+              // The key is consistency with how the hook types it.
+              // For display and comparison with numbers (like 1), convert if necessary.
+              // Let's assume the hook correctly types it based on ABI. If ABI says uint8, viem often maps to number.
+              const maxSelectionsValue = position.maxSelections; // This should be number or bigint based on hook
+              // To compare with 1 (number), if maxSelectionsValue is bigint, compare with 1n
+              // If maxSelectionsValue is number, compare with 1
+              // Let's use a safe comparison by converting to BigInt if needed, or assume hook handles it.
+              // For now, let's assume the hook returns it correctly typed. If error persists, cast explicitly.
+              // Example safe cast: const maxSelBigint = BigInt(maxSelectionsValue);
               return (
                 <li key={posIndex}>
-                  {/* Use .toString() for bigint display */}
-                  <strong>{position.name}</strong> (Max {maxSelectionsBigint.toString()} selection{maxSelectionsBigint !== 1n ? 's' : ''})
+                  {/* Use .toString() for display, ensure correct type comparison */}
+                  <strong>{position.name}</strong> (Max {maxSelectionsValue.toString()} selection{maxSelectionsValue !== 1 ? 's' : ''}) {/* Compare with 1 or 1n based on type */}
                   <ul className="candidates-list">
                     {ballotCandidates
-                      .filter((cand: { positionIndex: bigint; name: string; }) => cand.positionIndex === posIndexBigInt) // <-- Explicit type added here
-                      .map((candidate: { name: string; positionIndex: bigint; }, candIndex: number) => { // <-- Explicit types added here
+                      .filter((cand) => cand.positionIndex === posIndexBigInt) // Compare bigints
+                      .map((candidate, candIndex) => { // Let TS infer types
                         // Find the original index in the full ballotCandidates array
                         // This is necessary because ballotCandidateVotes corresponds to the full array indices
                         const originalCandidateIndex = ballotCandidates.findIndex(
-                          (c: { name: string; positionIndex: bigint; }) => c.name === candidate.name && c.positionIndex === candidate.positionIndex // <-- Explicit type added here
+                          (c) => c.name === candidate.name && c.positionIndex === candidate.positionIndex
                         );
                         // Get vote count using the original index, defaulting to 0n if not found
                         const votesForCandidate = originalCandidateIndex !== -1 && originalCandidateIndex < ballotCandidateVotes.length
@@ -215,7 +223,7 @@ const CampaignDisplay: React.FC<CampaignDisplayProps> = ({ campaignId }) => {
                           <li key={candIndex}>
                             {candidate.name}
                             <span className="vote-count"> ({formatVoteCount(votesForCandidate)} votes)</span>
-                          </li>
+                        </li>
                         );
                       })}
                   </ul>
