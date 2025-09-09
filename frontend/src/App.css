@@ -1,5 +1,16 @@
 /* src/App.css */
 
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-image: url('./assets/above-background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
 .app-container {
   text-align: center;
   margin: 40px auto;
@@ -7,7 +18,22 @@
   padding: 20px;
   font-family: Arial, sans-serif;
   line-height: 1.6;
+  background-color: rgba(255, 255, 255, 0.90); /* Semi-transparent white */
 }
+
+/* --- Logo Styles --- */
+.app-logo-container {
+  margin-bottom: 15px; /* Add some space below the logo */
+  display: flex;
+  justify-content: center; /* Center the logo within its container */
+}
+
+.app-logo {
+  height: 420px; /* Adjust this value to make the logo larger or smaller */
+  width: auto; /* Maintain the image's original aspect ratio */
+  max-width: 100%; /* Prevent the logo from overflowing its container on small screens */
+}
+/* --- END Logo Styles --- */
 
 .main-header {
   font-size: 3em;

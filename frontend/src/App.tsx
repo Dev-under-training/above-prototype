@@ -1,19 +1,27 @@
 // frontend/src/App.tsx
 import './App.css';
-import React, { useState, useEffect } from 'react'; // Import useState and useEffect
+import React, { useState, useEffect } from 'react';
+// Import the AppKit button component
 import { AppKitButton } from '@reown/appkit/react';
+// Import the wallet status component
 import WalletStatus from './components/WalletStatus';
+// Import the voter status component
 import VoterStatus from './components/VoterStatus';
+// Import the campaign display component
 import CampaignDisplay from './components/CampaignDisplay';
+// Import the voting interface component
 import VotingInterface from './components/VotingInterface';
-import { useABOVEBallot } from './hooks/useABOVEBallot'; // Import the hook to get nextCampaignId
+// Import the hook to get nextCampaignId
+import { useABOVEBallot } from './hooks/useABOVEBallot';
+// --- NEW: Import the logo image ---
+import aboveLogo from './assets/above-logo.png'; // Adjust the path if your assets folder is located differently relative to App.tsx
+// --- END NEW ---
 
 function App() {
   // State to hold the currently selected campaign ID
   const [selectedCampaignId, setSelectedCampaignId] = useState<bigint | null>(null);
 
   // Use the hook without a specific campaign ID to fetch global data like nextCampaignId
-  // Pass null or omit the argument if your hook expects it
   const { nextCampaignId, isFetchingNextCampaignId, isNextCampaignIdError, nextCampaignIdError } = useABOVEBallot(null);
 
   // --- Logic to generate campaign ID options ---
@@ -51,8 +59,15 @@ function App() {
 
   return (
     <div className="app-container">
-      <h1 className="main-header">ABOVE</h1>
-      <p className="sub-header">Auditable Ballots On a Verifiable Ecosystem (Multi-Campaign)</p>
+      {/* --- NEW: Replace text header with logo image --- */}
+      <div className="app-logo-container">
+        <img src={aboveLogo} alt="ABOVE Logo" className="app-logo" />
+      </div>
+      {/* --- END NEW: Replace text header with logo image --- */}
+
+      {/* --- UPDATED: Sub-header text --- */}
+      <p className="sub-header">Auditable Ballots On a Verifiable Ecosystem</p>
+      {/* --- END UPDATED: Sub-header text --- */}
 
       {/* Wallet Connection Button */}
       <div className="wallet-connect-button">
