@@ -224,6 +224,7 @@ contract ABOVEBallot is Ownable {
     /**
      * @dev Sets up a basic voting campaign. Only the owner can call this.
      *      Can only be called if the campaign is not yet finalized.
+     *      *** MODIFICATION: Finalizes the campaign upon setup ***
      * @param campaignId The ID of the campaign to configure.
      * @param _choices The list of choices/options for voters.
      * @param _isSingleVote True if voters can only select one option, false for multiple selections.
@@ -236,13 +237,22 @@ contract ABOVEBallot is Ownable {
     {
         require(_choices.length > 0, "ABOVEBallot: Must provide at least one choice.");
 
-        // Clear any previous data if needed (though should be empty for a new campaign)
-        delete basicChoicesByCampaign[campaignId];
+        // Clear any previous data if needed (though should be empty for a new/unfinalized campaign)
+        // --- REMOVED: delete basicChoicesByCampaign[campaignId]; // Cannot delete entire mapping
+        // --- REMOVED: delete basicChoiceVotesByCampaign[campaignId]; // Cannot delete entire mapping
+
+        // Populate the choices array for this campaign
         for (uint i = 0; i < _choices.length; i++) {
             basicChoicesByCampaign[campaignId].push(_choices[i]);
-            basicChoiceVotesByCampaign[campaignId][i] = 0; // Initialize vote counts
+            // Initialize vote counts for each new choice index
+            basicChoiceVotesByCampaign[campaignId][i] = 0;
         }
         isBasicSingleVoteByCampaign[campaignId] = _isSingleVote;
+
+        // --- KEY MODIFICATION: Finalize the campaign upon setup ---
+        campaigns[campaignId].isFinalized = true;
+        campaigns[campaignId].finalizedAt = block.timestamp;
+        // --- END KEY MODIFICATION ---
 
         emit BasicCampaignSet(campaignId, _choices, _isSingleVote);
     }
