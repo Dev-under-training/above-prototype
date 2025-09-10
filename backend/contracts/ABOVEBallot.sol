@@ -39,6 +39,12 @@ contract ABOVEBallot is Ownable {
     // Store campaign metadata by ID
     mapping(uint256 => Campaign) public campaigns;
 
+    // --- NEW: Dynamic Counters for Efficient Reset ---
+    // Track the number of choices/candidates for efficient clearing in resetCampaign
+    mapping(uint256 => uint256) private _basicChoiceCounts;
+    mapping(uint256 => uint256) private _ballotCandidateCounts;
+    // --- END NEW ---
+
     // --- Voting Tracking (per campaign) ---
     // Track if an address has voted in a specific campaign
     mapping(uint256 => mapping(address => bool)) public hasVotedInCampaign;
@@ -80,6 +86,13 @@ contract ABOVEBallot is Ownable {
     event BallotCampaignFinalized(uint256 indexed campaignId);
     event VoteCastBasic(uint256 indexed campaignId, address indexed voter, uint256[] selectedChoices);
     event VoteCastBallot(uint256 indexed campaignId, address indexed voter, uint256[] selectedCandidates);
+    // --- NEW EVENT for Reset ---
+    /**
+     * @dev Emitted when a campaign is reset by the owner.
+     * @param campaignId The ID of the campaign that was reset.
+     */
+    event CampaignReset(uint256 indexed campaignId);
+    // --- END NEW EVENT ---
     // --- End Events ---
 
     // --- Modifiers ---
@@ -218,6 +231,67 @@ contract ABOVEBallot is Ownable {
         // If it's not active, this call effectively does nothing but is allowed.
      }
 
+    // --- NEW FUNCTION: Campaign Reset ---
+    /**
+     * @dev Allows the owner to reset a finalized campaign, clearing all its associated data
+     *      and reverting it to an inactive, unfinalized state. This prepares the campaign ID
+     *      for potential reuse with a new setup.
+     *      USE WITH CAUTION: This action is irreversible for the current campaign instance.
+     *      The blockchain transaction history for the previous campaign instance remains immutable.
+     * @param campaignId The ID of the campaign to reset.
+     */
+    function resetCampaign(uint256 campaignId) external onlyOwner onlyValidCampaign(campaignId) onlyFinalizedCampaign(campaignId) {
+        // --- Clear Basic Campaign Data (if applicable) ---
+        if (campaigns[campaignId].campaignType == CampaignType.Basic) {
+            // Delete choices array and votes mapping for this campaign
+            delete basicChoicesByCampaign[campaignId];
+            // Use dynamic count for efficient clearing
+            uint256 choiceCount = _basicChoiceCounts[campaignId];
+            for (uint256 i = 0; i < choiceCount; i++) {
+                 delete basicChoiceVotesByCampaign[campaignId][i];
+            }
+            delete isBasicSingleVoteByCampaign[campaignId];
+            // Clear the dynamic count
+            delete _basicChoiceCounts[campaignId];
+        }
+
+        // --- Clear Ballot Campaign Data (if applicable) ---
+        if (campaigns[campaignId].campaignType == CampaignType.Ballot) {
+            // Delete positions and candidates arrays
+            delete positionsByCampaign[campaignId];
+            delete candidatesByCampaign[campaignId];
+            // Clear candidate votes mapping for this campaign using dynamic count
+            uint256 candidateCount = _ballotCandidateCounts[campaignId];
+            for (uint256 i = 0; i < candidateCount; i++) {
+                 delete candidateVotesByCampaign[campaignId][i];
+            }
+            // Clear the dynamic count
+            delete _ballotCandidateCounts[campaignId];
+        }
+
+        // --- Clear General Voting Tracking for this Campaign ---
+        // Note: `hasVotedInCampaign[campaignId][*]` entries remain due to mapping limitations.
+        // Voters from the old instance will still show `hasVoted=true` for this ID until they
+        // try to vote again (which will fail due to the campaign being reset/unfinalized).
+        // This is a limitation of the mapping structure for large, unknown sets.
+        // The `totalVotesPerCampaign` is easy to reset.
+        delete totalVotesPerCampaign[campaignId];
+
+        // --- Reset Campaign Metadata Flags ---
+        // Revert the campaign to its initial state: inactive and not finalized.
+        Campaign storage campaign = campaigns[campaignId];
+        campaign.isActive = false;
+        campaign.isFinalized = false;
+        campaign.finalizedAt = 0;
+        // Optionally clear the description if desired on reset
+        // campaign.description = "";
+        // Note: campaignType, id, and createdAt remain unchanged.
+
+        // --- Emit Event ---
+        emit CampaignReset(campaignId);
+    }
+    // --- END NEW FUNCTION ---
+
 
     // --- Basic Voting Functions (Updated to use campaignId) ---
 
@@ -248,6 +322,10 @@ contract ABOVEBallot is Ownable {
             basicChoiceVotesByCampaign[campaignId][i] = 0;
         }
         isBasicSingleVoteByCampaign[campaignId] = _isSingleVote;
+
+        // --- NEW: Update Dynamic Count ---
+        _basicChoiceCounts[campaignId] = _choices.length;
+        // --- END NEW ---
 
         // --- KEY MODIFICATION: Finalize the campaign upon setup ---
         campaigns[campaignId].isFinalized = true;
@@ -353,6 +431,10 @@ contract ABOVEBallot is Ownable {
         candidatesByCampaign[campaignId].push(Candidate({name: _name, positionIndex: _positionIndex}));
         positionsByCampaign[campaignId][_positionIndex].candidateCount += 1;
 
+        // --- NEW: Update Dynamic Count ---
+        _ballotCandidateCounts[campaignId] += 1;
+        // --- END NEW ---
+
         emit CandidateAdded(campaignId, newCandidateId, _name, _positionIndex);
     }
 
@@ -381,6 +463,10 @@ contract ABOVEBallot is Ownable {
             // The final count increment and single event emission cover the batch.
         }
         positionsByCampaign[campaignId][_positionIndex].candidateCount += uint256(_names.length); // Increment count
+
+        // --- NEW: Update Dynamic Count ---
+        _ballotCandidateCounts[campaignId] += _names.length;
+        // --- END NEW ---
 
         // Emit a single event for the batch
         emit CandidatesAdded(campaignId, _positionIndex, _names.length);
