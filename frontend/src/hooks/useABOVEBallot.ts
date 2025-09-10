@@ -432,6 +432,29 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
+  // --- NEW: 10. resetCampaign ---
+  const {
+    writeContract: resetCampaignWrite,
+    isPending: isResettingCampaign, // <-- New loading state
+    isSuccess: isResetCampaignSuccess, // <-- New success state
+    isError: isResetCampaignError, // <-- New error state
+    error: resetCampaignError, // <-- New error object
+  } = useWriteContract();
+
+  const handleResetCampaign = () => {
+    if (campaignId === null) {
+      console.error("Cannot reset campaign: campaignId is null");
+      return;
+    }
+    resetCampaignWrite({
+      address: CONTRACT_ADDRESSES.aboveBallot,
+      abi: ABOVE_BALLOT_ABI,
+      functionName: 'resetCampaign',
+      args: [campaignId],
+    });
+  };
+  // --- END NEW: resetCampaign ---
+
   // --- END NEW: Campaign Setup Functions ---
 
   // --- Return Values ---
@@ -556,6 +579,14 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isFinalizeBallotSetupSuccess,
     isFinalizeBallotSetupError,
     finalizeBallotSetupError,
+
+    // --- NEW: Reset Campaign ---
+    handleResetCampaign, // <-- Export the new handler
+    isResettingCampaign, // <-- Export the new loading state
+    isResetCampaignSuccess, // <-- Export the new success state
+    isResetCampaignError, // <-- Export the new error state
+    resetCampaignError, // <-- Export the new error object
+    // --- END NEW ---
     // --- END Campaign Management ---
   };
 };

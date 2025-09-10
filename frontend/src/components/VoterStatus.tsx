@@ -91,6 +91,13 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
     isFinalizeBallotSetupSuccess,
     isFinalizeBallotSetupError,
     finalizeBallotSetupError,
+    // --- NEW: Reset Campaign ---
+    handleResetCampaign, // New handler
+    isResettingCampaign, // New loading state
+    isResetCampaignSuccess, // New success state
+    isResetCampaignError, // New error state
+    resetCampaignError, // New error object
+    // --- END NEW ---
     // Get Next Campaign ID
     nextCampaignId,
     isFetchingNextCampaignId,
@@ -142,6 +149,11 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
   // --- State for Finalizing Ballot Campaign ---
   const [finalizeBallotMessage, setFinalizeBallotMessage] = useState<string>('');
   // --- END State for Finalizing Ballot Campaign ---
+
+  // --- NEW: State for Reset Campaign Confirmation ---
+  const [showResetConfirmation, setShowResetConfirmation] = useState<boolean>(false);
+  const [resetCampaignMessage, setResetCampaignMessage] = useState<string>('');
+  // --- END NEW ---
 
   // --- Handlers for Voter Management ---
   const handleAddVoterSubmit = (e: React.FormEvent) => {
@@ -324,6 +336,29 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
     handleFinalizeBallotSetup();
   };
 
+  // --- NEW: Handler for Resetting Campaign ---
+  const handleResetCampaignClick = () => {
+    // Show confirmation UI instead of calling directly
+    setShowResetConfirmation(true);
+    setResetCampaignMessage(''); // Clear any previous message
+  };
+
+  const handleConfirmResetCampaign = () => {
+    if (campaignId === null) {
+        setResetCampaignMessage('No campaign selected.');
+        setShowResetConfirmation(false);
+        return;
+    }
+    handleResetCampaign(); // Call the hook function
+    setShowResetConfirmation(false); // Hide confirmation after triggering
+  };
+
+  const handleCancelResetCampaign = () => {
+    setShowResetConfirmation(false);
+    setResetCampaignMessage(''); // Clear message on cancel
+  };
+  // --- END NEW Handler ---
+
   // --- END Handlers for Campaign Setup ---
 
   // --- useEffects for Clearing Inputs and Showing Messages on Success ---
@@ -415,6 +450,29 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
          setCreateCampaignMessage('Campaign deactivated successfully!');
     }
   }, [isDeactivateCampaignSuccess]);
+
+  // --- NEW: useEffect for Reset Campaign ---
+  useEffect(() => {
+    if (isResetCampaignSuccess) {
+         setResetCampaignMessage('Campaign reset successfully!');
+         // Optionally clear other states related to this campaign if needed
+         // Reset local state for ballot setup if this was a ballot campaign
+         setLastAddedPositionIndex(null);
+         setPendingPositionIndex(null);
+         setCandidateNamesForLastPosition('');
+         // Reset basic setup state if this was a basic campaign
+         setBasicChoicesInput('');
+         setIsBasicSingleVoteInput(true);
+         // Clear messages related to setup
+         setSetBasicCampaignMessage('');
+         setAddBallotPositionMessage('');
+         setFinalizeBallotMessage('');
+    }
+    if (isResetCampaignError) {
+         setResetCampaignMessage(`Error resetting campaign: ${resetCampaignError?.message || 'Unknown error'}`);
+    }
+  }, [isResetCampaignSuccess, isResetCampaignError, resetCampaignError]);
+  // --- END NEW useEffect ---
   // --- END useEffects ---
 
   if (!isConnected) {
@@ -719,6 +777,63 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
           </>
         )}
         {/* --- END Ballot Campaign Setup --- */}
+
+        {/* --- NEW: Reset Campaign Section (if campaignId is provided and campaign is finalized) --- */}
+        {campaignId !== null && campaign?.isFinalized && (
+          <>
+            {/* --- Separator --- */}
+            <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
+
+            <h4>Danger Zone: Reset Campaign (ID: {campaignId.toString()})</h4>
+            {/* --- Cautionary Warning --- */}
+            <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeaa7', color: '#856404', padding: '10px', borderRadius: '5px', marginBottom: '15px' }}>
+              <p><strong>⚠️ Caution:</strong></p>
+              <ul>
+                <li><strong>Irreversible Action:</strong> Resetting this campaign will permanently erase all choices, candidates, and vote counts associated with Campaign ID.</li>
+                <li><strong>Scalability Limitation:</strong> The reset process involves clearing data on the blockchain. While efficient for small campaigns (e.g., fewer than 100 choices/candidates), it can become extremely slow, expensive in gas fees, and potentially fail for large campaigns (e.g., hundreds or thousands of choices/candidates).</li>
+                <li><strong>Recommendation for Large Campaigns:</strong> For large-scale elections or polls, it is strongly recommended to create a <em>new</em> campaign with a unique ID instead of resetting an existing one. This approach is more efficient, avoids potential gas issues, and provides a clearer historical record.</li>
+                <li><strong>Data Persistence:</strong> Please note, while the contract state is cleared, the blockchain transaction history showing that this campaign existed and was voted on remains permanently immutable.</li>
+              </ul>
+            </div>
+            {/* --- END Cautionary Warning --- */}
+
+            {/* --- Reset Button & Confirmation UI --- */}
+            {!showResetConfirmation ? (
+              <button
+                onClick={handleResetCampaignClick}
+                disabled={isResettingCampaign}
+                style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                {isResettingCampaign ? 'Resetting Campaign...' : 'Reset Campaign'}
+              </button>
+            ) : (
+              <div style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#f8f9fa' }}>
+                <p><strong>Are you sure you want to reset Campaign ID {campaignId.toString()}?</strong></p>
+                <p style={{ color: 'red' }}><strong>This action cannot be undone.</strong></p>
+                <button
+                  onClick={handleConfirmResetCampaign}
+                  disabled={isResettingCampaign}
+                  style={{ backgroundColor: '#dc3545', color: 'white', marginRight: '10px' }}
+                >
+                  {isResettingCampaign ? 'Resetting...' : 'Yes, Reset Campaign'}
+                </button>
+                <button onClick={handleCancelResetCampaign} disabled={isResettingCampaign}>
+                  Cancel
+                </button>
+              </div>
+            )}
+            {/* --- END Reset Button & Confirmation UI --- */}
+
+            {/* --- Status Messages --- */}
+            {resetCampaignMessage && (
+              <p style={{ color: resetCampaignMessage.includes('successfully') ? 'green' : 'red', marginTop: '10px' }}>
+                {resetCampaignMessage}
+              </p>
+            )}
+            {/* --- END Status Messages --- */}
+          </>
+        )}
+        {/* --- END NEW: Reset Campaign Section --- */}
 
       </details>
     </div>
