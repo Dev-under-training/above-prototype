@@ -1,229 +1,504 @@
-/* src/App.css */
+/* frontend/src/App.css */
 
+/* --- Base Styles for Background --- */
+/* Apply styles to html and body for background and basic setup */
 html, body {
+  /* Essential for full height background and scrolling */
   height: 100%;
   margin: 0;
   padding: 0;
+
+  /* --- Background Image --- */
   background-image: url('./assets/above-background.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   background-attachment: fixed;
+
+  /* Font and smoothing */
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Crucial for allowing the page content (including .app-container) to determine scroll height */
+  /* Removed flexbox centering from body/html to avoid potential conflicts with app-container's layout/scrolling */
 }
 
+
+/* --- App Container Styles --- */
+/* Main application container */
 .app-container {
+  /* --- Sizing --- */
+  /* Make it at least full viewport height */
+  min-height: 100vh;
+  /* Allow height to grow based on content */
+  height: auto;
+  /* Set width to 70% of the viewport */
+  width: 70%;
+  /* Maximum width constraint */
+  max-width: 1200px;
+
+  /* --- Layout --- */
+  /* Use flexbox for internal layout */
+  display: flex;
+  flex-direction: column;
+  /* Align text inside */
   text-align: center;
-  margin: 40px auto;
-  max-width: 800px;
+
+  /* --- Spacing & Appearance --- */
+  /* Center the container horizontally using auto margins */
+  margin: 0 auto;
+  /* Internal padding */
   padding: 20px;
-  font-family: Arial, sans-serif;
-  line-height: 1.6;
-  background-color: rgba(255, 255, 255, 0.90); /* Semi-transparent white */
+  /* Semi-transparent white background */
+  background-color: rgba(255, 255, 255, 0.92);
+  /* Subtle but noticeable shadow */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  /* Rounded corners */
+  border-radius: 10px;
+  /* Box sizing */
+  box-sizing: border-box;
+
+  /* --- Scrolling --- */
+  /* Allow content inside to overflow and become scrollable if needed */
+  /* overflow-y: auto; */
+  /* Allow content to potentially extend beyond container bounds if necessary */
+  /* This helps if internal elements cause clipping */
+  overflow: visible;
+}
+
+/* --- Header Styles --- */
+.main-header {
+  margin-bottom: 10px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* --- Logo Styles --- */
 .app-logo-container {
-  margin-bottom: 15px; /* Add some space below the logo */
-  display: flex;
-  justify-content: center; /* Center the logo within its container */
+  margin-bottom: 10px;
 }
 
 .app-logo {
-  height: 420px; /* Adjust this value to make the logo larger or smaller */
-  width: auto; /* Maintain the image's original aspect ratio */
-  max-width: 100%; /* Prevent the logo from overflowing its container on small screens */
+  height: 120px;
+  width: auto;
+  max-width: 100%;
 }
 /* --- END Logo Styles --- */
 
-.main-header {
-  font-size: 3em;
-  margin-bottom: 0.5em;
+/* --- Sub-header Styles --- */
+.sub-header {
+  font-size: 1.3em;
+  color: #555;
+  margin: 5px 0 15px 0;
+  font-weight: 500;
+}
+/* --- END Sub-header Styles --- */
+
+
+/* --- Wallet Connect Button Styles --- */
+.wallet-connect-button {
+  margin: 15px 0;
+}
+.wallet-connect-button > w3m-button,
+.wallet-connect-button > appkit-button {
+  /* Example: Target inner button if needed for specific styling */
+  /* --w3m-button-border-radius: 8px; */
+}
+/* --- END Wallet Connect Button Styles --- */
+
+/* --- Connection Status & Wallet Status Styles --- */
+.connection-status,
+.wallet-status {
+  margin: 15px auto;
+  padding: 12px 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+  text-align: left;
+  max-width: 95%;
+  word-break: break-word;
+  font-size: 0.95em;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.connection-status p,
+.wallet-status p {
+  margin: 4px 0;
+}
+.connection-status strong,
+.wallet-status strong {
+  color: #333;
+}
+/* --- END Connection/Wallet Status Styles --- */
+
+
+/* --- Dynamic Campaign Selection UI --- */
+.campaign-selector {
+  margin: 20px auto;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: #f0f2f5;
+  text-align: left;
+  max-width: 95%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.campaign-selector label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #444;
+  font-size: 1em;
+}
+
+.campaign-selector select {
+  padding: 10px;
+  width: 100%;
+  max-width: 500px;
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  background-color: #ffffff;
+  font-size: 1em;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+.campaign-selector p {
+  margin-top: 10px;
+  font-size: 1em;
+  color: #34495e;
+}
+
+.campaign-selector p strong {
   color: #2c3e50;
 }
+/* --- END Dynamic Campaign Selection UI --- */
 
-.sub-header {
-  font-size: 1.2em;
-  color: #7f8c8d;
-  margin-top: 0;
-  margin-bottom: 2em;
-}
 
-.wallet-connect-button {
-  margin: 20px 0;
-}
-
-/* Wallet Status Styles */
-.wallet-status {
-  margin: 20px 0;
-  padding: 15px;
-  border: 1px solid #ccc;
+/* --- General Button Styles --- */
+/* Target buttons inside main components */
+.voter-status button,
+.campaign-display button,
+.voting-interface button,
+button.app-button {
+  padding: 10px 18px;
+  margin: 5px;
+  border: none;
   border-radius: 5px;
-  background-color: #f9f9f9;
-  text-align: left;
-  display: inline-block;
-  max-width: 90%;
-  word-break: break-all;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.95em;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-
-.wallet-status p {
-  margin: 5px 0;
+.voter-status button:hover,
+.campaign-display button:hover,
+.voting-interface button:hover,
+button.app-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
 }
+.voter-status button:active,
+.campaign-display button:active,
+.voting-interface button:active,
+button.app-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.voter-status button:disabled,
+.campaign-display button:disabled,
+.voting-interface button:disabled,
+button.app-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
+  box-shadow: none;
+}
+/* --- END General Button Styles --- */
 
-/* Voter Status Styles */
+
+/* --- General Input Styles --- */
+/* Target inputs/textarea/selects inside components */
+.voter-status input[type="text"],
+.voter-status input[type="number"],
+.voter-status textarea,
+.voter-status select,
+.voting-interface input[type='radio'],
+.voting-interface input[type='checkbox'] {
+  font-family: inherit;
+  font-size: 1em;
+  padding: 8px 10px;
+  margin: 4px 0 10px 0;
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+.voter-status input[type="text"]:focus,
+.voter-status input[type="number"]:focus,
+.voter-status textarea:focus,
+.voter-status select:focus,
+.voting-interface input[type='radio']:focus,
+.voting-interface input[type='checkbox']:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+/* --- END General Input Styles --- */
+
+
+/* --- Voter Status Styles --- */
 .voter-status {
-  margin: 20px 0;
+  margin: 20px auto;
   padding: 15px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
   background-color: #fafafa;
   text-align: left;
+  max-width: 95%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .voter-status h3 {
   margin-top: 0;
+  color: #2c3e50;
+  font-size: 1.4em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
 }
 
-.voter-status form {
-  margin-top: 10px;
-}
-
-.voter-status label {
-  display: block;
-  margin-bottom: 5px;
-}
-
-.voter-status input {
-  padding: 8px;
-  margin-right: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.voter-status button {
-  padding: 8px 16px;
-  background-color: #3498db;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.voter-status button:hover {
-  background-color: #2980b9;
-}
-
-.voter-status button:disabled {
-  background-color: #bdc3c7;
-  cursor: not-allowed;
-}
-
+/* Style for the <details> element */
 .voter-status details {
   margin-top: 15px;
+  border: 1px solid #e9ecef;
+  border-radius: 5px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 
+/* Style for the <summary> element */
 .voter-status summary {
   cursor: pointer;
-  font-weight: bold;
+  font-weight: 600;
+  padding: 12px 15px;
+  background-color: #e9ecef;
+  border-radius: 5px;
+  list-style: none;
+  transition: background-color 0.2s ease;
+}
+.voter-status summary::-webkit-details-marker {
+  display: none;
+}
+.voter-status summary:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+.voter-status summary:hover {
+  background-color: #dde1e5;
 }
 
-/* Campaign Display Styles */
+/* Content inside <details> */
+.voter-status details[open] {
+  padding: 10px 15px 15px 15px;
+}
+/* --- END Voter Status Styles --- */
+
+
+/* --- Campaign Display Styles --- */
 .campaign-display {
-  margin: 20px 0;
-  padding: 15px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  background-color: #f9f9f9;
+  margin: 20px auto;
+  padding: 18px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: #ffffff;
   text-align: left;
+  max-width: 95%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .campaign-display h3 {
   margin-top: 0;
+  color: #2c3e50;
+  font-size: 1.4em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
 }
 
-.choices-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 15px 0;
-}
-
-.choices-table th,
-.choices-table td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: left;
-}
-
-.choices-table th {
-  background-color: #f2f2f2;
-}
-
-.positions-list {
-  list-style-type: none;
-  padding-left: 0;
-}
-
-.positions-list li {
-  margin-bottom: 15px;
-  padding: 10px;
-  border: 1px solid #eee;
-  border-radius: 5px;
-  background-color: #fff;
-}
-
-.positions-list li strong {
-  display: block;
-  margin-bottom: 5px;
-}
-
-.candidates-list {
-  list-style-type: none;
-  padding-left: 20px;
-  margin: 5px 0;
-}
-
-.candidates-list li {
-  margin-bottom: 5px;
-}
-
-.vote-count {
-  font-size: 0.9em;
-  color: #666;
-}
-
-/* --- NEW: Campaign Description Styles --- */
+/* --- Campaign Description Styles --- */
 .campaign-description {
-  margin: 15px 0;
-  padding: 10px;
-  border-left: 4px solid #3498db; /* Blue accent */
-  background-color: #ecf0f1; /* Light grey background */
+  margin: 15px 0 20px 0;
+  padding: 12px 15px;
+  border-left: 4px solid #3498db;
+  background-color: #e3f2fd;
+  border-radius: 0 4px 4px 0;
 }
 
 .campaign-description h4 {
   margin-top: 0;
-  margin-bottom: 5px;
-  color: #2c3e50; /* Darker header color */
+  margin-bottom: 6px;
+  color: #2c3e50;
+  font-size: 1.1em;
 }
 
 .campaign-description p {
   margin: 0;
-  white-space: pre-wrap; /* Preserve line breaks and wrap text */
+  white-space: pre-wrap;
+  font-size: 0.95em;
+  color: #444;
 }
-/* --- END NEW: Campaign Description Styles --- */
+/* --- END Campaign Description Styles --- */
 
 
-/* --- NEW: Voting Interface Styles --- */
-.voting-interface {
-  margin: 20px 0;
-  padding: 15px;
-  border: 1px solid #ddd;
+/* --- Basic Results Table Styles --- */
+.choices-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 15px 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   border-radius: 5px;
-  background-color: #fafafa; /* Slightly different background */
+  overflow: hidden;
+}
+
+.choices-table th,
+.choices-table td {
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 15px;
   text-align: left;
+}
+
+.choices-table th {
+  background-color: #e3f2fd;
+  font-weight: 600;
+  color: #2c3e50;
+  text-align: center;
+  border-top: none;
+  border-left: none;
+}
+.choices-table td {
+  border-top: none;
+  border-left: none;
+}
+/* Remove last border */
+.choices-table th:last-child,
+.choices-table td:last-child {
+  border-right: none;
+}
+.choices-table tr:last-child td {
+  border-bottom: none;
+}
+
+.choices-table tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+.choices-table tbody tr:hover {
+  background-color: #e9f7fe;
+}
+
+.choices-table .votes-column {
+  text-align: right;
+  font-weight: 600;
+  color: #2c3e50;
+}
+/* --- END Basic Results Table Styles --- */
+
+
+/* --- Ballot Results Styles --- */
+.positions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.position-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 15px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.position-title {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #2c3e50;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.max-selections {
+  font-size: 0.85em;
+  color: #7f8c8d;
+  background-color: #ecf0f1;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.candidates-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.candidate-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.candidate-item:last-child {
+  border-bottom: none;
+}
+
+.candidate-name {
+  font-weight: normal;
+  font-size: 0.95em;
+}
+
+.candidate-votes {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.95em;
+}
+
+.no-candidates {
+  font-style: italic;
+  color: #95a5a6;
+  font-size: 0.9em;
+}
+/* --- END Ballot Results Styles --- */
+
+
+/* --- Voting Interface Styles --- */
+.voting-interface {
+  margin: 20px auto;
+  padding: 18px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: #ffffff;
+  text-align: left;
+  max-width: 95%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .voting-interface h3 {
   margin-top: 0;
   color: #2c3e50;
+  font-size: 1.4em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
 }
 
 .voting-interface form {
@@ -231,67 +506,256 @@ html, body {
 }
 
 .voting-interface fieldset {
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 15px;
-  background-color: #ffffff; /* White background for fieldsets */
+  border: 1px solid #e0e0e0;
+  border-radius: 5px;
+  padding: 15px;
+  margin-bottom: 20px;
+  background-color: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 
 .voting-interface legend {
-  font-weight: bold;
-  padding: 0 5px;
+  font-weight: 600;
+  padding: 0 8px;
   color: #34495e;
+  font-size: 1em;
+  background-color: #ffffff;
+  border-radius: 3px;
 }
 
 .voting-interface label {
   display: block;
-  margin-bottom: 5px;
-  cursor: pointer; /* Indicate labels are clickable */
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: 500;
 }
 
 .voting-interface input[type='radio'],
 .voting-interface input[type='checkbox'] {
-  margin-right: 8px;
+  margin-right: 10px;
+  transform: scale(1.2);
 }
 
-.voting-interface button {
-  padding: 10px 20px;
-  background-color: #27ae60; /* Green color for submit */
+/* Specific styles for submit button */
+.voting-interface button[type="submit"] {
+  padding: 12px 24px;
+  background-color: #27ae60;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
   font-size: 1em;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+  margin-top: 10px;
+  box-shadow: 0 2px 4px rgba(39, 174, 96, 0.2);
 }
-
-.voting-interface button:hover {
-  background-color: #219653; /* Darker green on hover */
+.voting-interface button[type="submit"]:hover {
+  background-color: #219653;
+  box-shadow: 0 3px 6px rgba(39, 174, 96, 0.3);
 }
-
-.voting-interface button:disabled {
-  background-color: #bdc3c7; /* Grey out disabled button */
+.voting-interface button[type="submit"]:disabled {
+  background-color: #bdc3c7;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
+/* Message styles */
+.voting-interface .message {
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  text-align: left;
+  font-weight: 500;
+}
 .voting-interface .success-message {
-  color: green;
-  font-weight: bold;
-  margin-top: 10px;
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
 }
-
 .voting-interface .error-message {
-  color: red;
-  font-weight: bold;
-  margin-top: 10px;
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
 }
-
 .voting-interface .info-message {
-  color: orange; /* Or blue (#3498db) */
-  font-weight: bold;
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+/* --- END Voting Interface Styles --- */
+
+
+/* --- Footer Styles --- */
+.main-footer {
+  padding-top: 15px;
+  margin-top: auto;
+  border-top: 1px solid #ddd;
+  color: #7f8c8d;
+  font-size: 0.85em;
+}
+/* --- END Footer Styles --- */
+
+
+/* --- Utility Classes --- */
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mb-10 {
+  margin-bottom: 10px;
+}
+
+.mt-10 {
   margin-top: 10px;
 }
-/* --- END NEW: Voting Interface Styles --- */
+
+.ml-10 {
+  margin-left: 10px;
+}
+
+.mr-10 {
+  margin-right: 10px;
+}
+/* --- END Utility Classes --- */
 
 
-/* --- End of component styles --- */
+/* --- Loading Spinner --- */
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, .3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.loading-spinner.dark {
+  border: 3px solid rgba(0, 0, 0, .1);
+  border-top-color: #333;
+}
+/* --- END Loading Spinner --- */
+
+
+/* --- Manage Wallet Button Styles --- */
+/* Styles for a potential explicit manage wallet button */
+.manage-wallet-button {
+  padding: 10px 18px;
+  margin: 5px;
+  background-color: #95a5a6;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.95em;
+  font-weight: 600;
+  transition: background-color 0.2s ease-in-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.manage-wallet-button:hover {
+  background-color: #7f8c8d;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.manage-wallet-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+/* --- END Manage Wallet Button Styles --- */
+
+
+/* --- Responsive adjustments --- */
+@media (max-width: 768px) {
+  /* Adjustments for smaller screens */
+
+  .app-container {
+    width: 95%;
+    min-height: 100vh;
+    padding: 15px;
+    margin: 0 auto;
+    border-radius: 5px;
+  }
+
+  .app-logo {
+    height: 80px;
+  }
+
+  .main-header {
+     align-items: stretch;
+  }
+
+  .sub-header {
+    font-size: 1.1em;
+  }
+
+  /* Adjust padding/margins for smaller screens */
+  .campaign-selector,
+  .voter-status,
+  .campaign-display,
+  .voting-interface {
+    padding: 15px;
+  }
+
+  .voter-status input[type="text"],
+  .voter-status input[type="number"],
+  .voter-status textarea,
+  .voter-status select,
+  .voting-interface input[type='radio'],
+  .voting-interface input[type='checkbox'],
+  .voting-interface label {
+    width: calc(100% - 10px);
+    margin: 5px 0;
+  }
+
+  .voter-status button,
+  .voting-interface button,
+  .voting-interface button[type="submit"],
+  .manage-wallet-button {
+    width: 100%;
+    margin: 5px 0;
+    padding: 10px;
+    font-size: 0.95em;
+  }
+
+  .voting-interface fieldset {
+    padding: 10px;
+  }
+
+  .voting-interface legend {
+    font-size: 0.95em;
+  }
+
+  .choices-table th,
+  .choices-table td {
+    padding: 8px 10px;
+  }
+
+  .position-title {
+    font-size: 1em;
+  }
+
+  .candidate-name,
+  .candidate-votes {
+    font-size: 0.9em;
+  }
+}
+/* --- End Responsive adjustments --- */
+
+
+/* --- End of file --- */

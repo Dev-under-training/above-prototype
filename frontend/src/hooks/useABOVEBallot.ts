@@ -41,11 +41,26 @@ type Campaign = {
  * Custom hook for interacting with the ABOVEBallot contract.
  * Provides functions to get campaign info, check vote status, cast votes, and manage campaigns.
  * This version aims for better compatibility with TypeScript/Viem/Wagmi typing.
+ * Includes logic to fetch the contract owner.
  */
 export const useABOVEBallot = (campaignId: bigint | null) => {
   const { address: userAddress } = useAccount();
 
   // --- Read Functions ---
+
+  // --- NEW: Fetch Contract Owner Address ---
+  const {
+    data: contractOwnerData,
+    isLoading: isFetchingOwner,
+    isError: isOwnerError,
+    error: ownerError,
+  } = useReadContract({
+    address: CONTRACT_ADDRESSES.aboveBallot,
+    abi: ABOVE_BALLOT_ABI,
+    functionName: 'owner', // This is the standard Ownable function
+  });
+  const contractOwner = contractOwnerData as Address | undefined;
+  // --- END NEW ---
 
   // --- 1. voterRegistry Address ---
   const {
@@ -459,6 +474,13 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
 
   // --- Return Values ---
   return {
+    // --- NEW: Owner Data ---
+    contractOwner,
+    isFetchingOwner,
+    isOwnerError,
+    ownerError,
+    // --- END NEW ---
+
     // --- Read data (with defaults) ---
     voterRegistryAddress: voterRegistryAddress ?? '0x0000000000000000000000000000000000000000',
     isFetchingVoterRegistry,
