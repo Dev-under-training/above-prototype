@@ -2,7 +2,7 @@
 // --- Minimal Reown AppKit + Wagmi Setup (Based on Reown Docs) ---
 import { createAppKit } from '@reown/appkit/react';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
-import { hardhat } from '@reown/appkit/networks';
+import { hardhat, sepolia } from '@reown/appkit/networks';
 import { QueryClient } from '@tanstack/react-query';
 
 // 0. Setup QueryClient (Required by React Query / Wagmi)
@@ -22,7 +22,7 @@ const metadata = {
 
 // 3. Define Networks (Required)
 import type { AppKitNetwork } from '@reown/appkit/networks';
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [hardhat]; // Use local Hardhat network
+const networks: [AppKitNetwork, ...AppKitNetwork[]] = [sepolia]; // Use local Hardhat network
 
 // 4. Create Wagmi Adapter (Required for EVM)
 // The adapter bridges AppKit with Wagmi and includes 'injected' connector
