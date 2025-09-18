@@ -10,17 +10,17 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 // --- READ PRIVATE KEY FROM ENVIRONMENT VARIABLE ---
-const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+const DEPLOYER_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY;
 
 // Network endpoint for the local Hardhat node
-const HARDHAT_NETWORK_URL = "http://127.0.0.1:8545";
+const SEPOLIA_NETWORK_URL = "https://sepolia.infura.io/v3/ab8470a6c1704dbbb870f3ae84cbab5b";
 
 async function main() {
     console.log("Starting manual deployment script using standalone Ethers.js...");
 
     // --- 1. Connect to the Hardhat Network Provider ---
-    const provider = new ethers.JsonRpcProvider(HARDHAT_NETWORK_URL);
-    console.log(`Connected to Hardhat network at ${HARDHAT_NETWORK_URL}`);
+    const provider = new ethers.JsonRpcProvider(SEPOLIA_NETWORK_URL);
+    console.log(`Connected to Hardhat network at ${SEPOLIA_NETWORK_URL}`);
 
     // --- 2. Create Deployer Signer ---
     // Check if the private key was provided via environment variable

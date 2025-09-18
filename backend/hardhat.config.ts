@@ -2,6 +2,9 @@ import type { HardhatUserConfig } from "hardhat/config";
 
 import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import { configVariable } from "hardhat/config";
+import * as dotenv from "dotenv"; // Add this import
+
+dotenv.config(); // Load .env variables
 
 const config: HardhatUserConfig = {
   plugins: [hardhatToolboxMochaEthersPlugin],
@@ -33,7 +36,7 @@ const config: HardhatUserConfig = {
     sepolia: {
       type: "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
+      url: configVariable("https://sepolia.infura.io/v3/ab8470a6c1704dbbb870f3ae84cbab5b"),
       accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
     },
   },
