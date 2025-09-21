@@ -9,23 +9,28 @@ import * as dotenv from "dotenv";
 // Load environment variables from .env file
 dotenv.config();
 
-// --- READ PRIVATE KEY FROM ENVIRONMENT VARIABLE ---
+// --- READ PRIVATE KEYS AND NETWORK CONFIGURATION FROM ENVIRONMENT VARIABLES ---
+// Ensure your .env file contains SEPOLIA_PRIVATE_KEY
 const DEPLOYER_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY;
+// Ensure your .env file contains SEP_ABOVE_TOKEN_ADDRESS
+const SEP_ABOVE_TOKEN_ADDRESS = process.env.SEP_ABOVE_TOKEN_ADDRESS;
 
-// Network endpoint for the local Hardhat node
-const SEPOLIA_NETWORK_URL = "https://sepolia.infura.io/v3/ab8470a6c1704dbbb870f3ae84cbab5b";
+// Network endpoint for Sepolia Testnet
+// CRITICAL: Ensure there is NO trailing space in your URL
+const SEPOLIA_NETWORK_URL = "https://sepolia.infura.io/v3/ab8470a6c1704dbbb870f3ae84cbab5b"; // Ensure this matches your setup
+// --- END CONFIGURATION ---
 
 async function main() {
-    console.log("Starting manual deployment script using standalone Ethers.js...");
+    console.log("Starting manual deployment script using standalone Ethers.js for Sepolia...");
 
-    // --- 1. Connect to the Hardhat Network Provider ---
-    const provider = new ethers.JsonRpcProvider(SEPOLIA_NETWORK_URL);
-    console.log(`Connected to Hardhat network at ${SEPOLIA_NETWORK_URL}`);
+    // --- 1. Connect to the Sepolia Network Provider ---
+    const provider = new ethers.JsonRpcProvider(SEPOLIA_NETWORK_URL.trim()); // .trim() to remove any potential whitespace
+    console.log(`Connected to Sepolia network at ${SEPOLIA_NETWORK_URL}`);
 
     // --- 2. Create Deployer Signer ---
     // Check if the private key was provided via environment variable
     if (!DEPLOYER_PRIVATE_KEY) {
-        throw new Error("CRITICAL ERROR: DEPLOYER_PRIVATE_KEY environment variable is not set. Please ensure you have a .env file with DEPLOYER_PRIVATE_KEY=your_actual_key_here");
+        throw new Error("CRITICAL ERROR: SEPOLIA_PRIVATE_KEY environment variable is not set. Please ensure you have a .env file with SEPOLIA_PRIVATE_KEY=your_actual_sepolia_key_here");
     }
     const deployerWallet = new ethers.Wallet(DEPLOYER_PRIVATE_KEY, provider);
     const deployerAddress = await deployerWallet.getAddress();
@@ -45,31 +50,38 @@ async function main() {
         voterRegistryArtifact.bytecode,
         deployerWallet
     );
-    // Type the deployed instance using the generated TypeChain interface (if available and paths are correct)
-    // import type { VoterRegistry } from "../types/typechain-types";
-    // const voterRegistry = (await voterRegistryFactory.deploy()) as VoterRegistry;
     const voterRegistry = await voterRegistryFactory.deploy();
     await voterRegistry.waitForDeployment();
     const voterRegistryAddress = await voterRegistry.getAddress();
     console.log(`VoterRegistry deployed to: ${voterRegistryAddress}`);
 
-    // --- 5. Deploy ABOVEBallot ---
+    // --- 5. Validate ABOVE Token Address ---
+    console.log("Validating ABOVE Token Address from .env...");
+    if (!SEP_ABOVE_TOKEN_ADDRESS) {
+        throw new Error("CRITICAL ERROR: SEP_ABOVE_TOKEN_ADDRESS environment variable is not set. Please ensure you have a .env file with SEP_ABOVE_TOKEN_ADDRESS=your_deployed_above_token_address_on_sepolia");
+    }
+    // Basic validation (check if it looks like an address)
+    if (!ethers.isAddress(SEP_ABOVE_TOKEN_ADDRESS)) {
+         throw new Error(`CRITICAL ERROR: SEP_ABOVE_TOKEN_ADDRESS from .env ('${SEP_ABOVE_TOKEN_ADDRESS}') is not a valid Ethereum address.`);
+    }
+    const aboveTokenAddress = SEP_ABOVE_TOKEN_ADDRESS; // Use the validated address
+    console.log(`Using ABOVE Token Address from .env: ${aboveTokenAddress}`);
+
+    // --- 6. Deploy ABOVEBallot ---
     console.log("Deploying ABOVEBallot...");
     const aboveBallotFactory = new ethers.ContractFactory(
         aboveBallotArtifact.abi,
         aboveBallotArtifact.bytecode,
         deployerWallet
     );
-    // Pass the deployed VoterRegistry address to the ABOVEBallot constructor
-    // Type the deployed instance using the generated TypeChain interface (if available and paths are correct)
-    // import type { ABOVEBallot } from "../types/typechain-types";
-    // const aboveBallot = (await aboveBallotFactory.deploy(voterRegistryAddress)) as ABOVEBallot;
-    const aboveBallot = await aboveBallotFactory.deploy(voterRegistryAddress);
+    // --- PASS THE REQUIRED CONSTRUCTOR ARGUMENTS ---
+    // Pass the deployed VoterRegistry address AND the ABOVE Token address loaded from .env
+    const aboveBallot = await aboveBallotFactory.deploy(voterRegistryAddress, aboveTokenAddress);
     await aboveBallot.waitForDeployment();
     const aboveBallotAddress = await aboveBallot.getAddress();
     console.log(`ABOVEBallot deployed to: ${aboveBallotAddress}`);
 
-    // --- 6. Basic Interaction Testing ---
+    // --- 7. Basic Interaction Testing ---
     console.log("\n--- Testing VoterRegistry ---");
     // Example interaction: Add deployer as a voter (using the deployed contract instance)
     console.log(`Adding deployer (${deployerAddress}) as a voter...`);
@@ -86,7 +98,7 @@ async function main() {
     console.log("\n--- Deployment and Basic Interaction Complete ---");
     console.log(`VoterRegistry Address: ${voterRegistryAddress}`);
     console.log(`ABOVEBallot Address: ${aboveBallotAddress}`);
-    console.log("SUCCESS: Contracts deployed and basic interaction verified using standalone Ethers.js!");
+    console.log("SUCCESS: Contracts deployed and basic interaction verified using standalone Ethers.js for Sepolia!");
 }
 
 main()

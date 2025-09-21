@@ -2,22 +2,34 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-// We will interact with VoterRegistry via its address directly.
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // Import IERC20 for ABOVE token interaction
 
 /**
  * @title ABOVEBallot
  * @dev A flexible smart contract for managing multiple voting campaigns.
  *      Supports Basic Voting (single/multiple choice) and Ballot Type Voting (structured positions/candidates).
- *      Integrates with VoterRegistry for eligibility checks.
+ *      Integrates with the native ABOVE token for campaign creation fees and voter rewards.
  *      Campaigns are identified by unique IDs for immutability and historical access.
- *      This MVP version focuses on core multi-campaign logic.
+ *      Campaign creation is decentralized (anyone can create, paying a fee).
+ *      Campaign configuration is restricted to the creator.
+ *      Voter eligibility is simplified for testnet (must hold ABOVE tokens).
+ *      This version focuses on core multi-campaign logic with tokenomics and decentralization.
  *      Future versions will integrate advanced cryptography for anonymity.
  */
-contract ABOVEBallot is Ownable {
+contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functions like setting fees */ {
+
+    // --- Token Integration ---
+    IERC20 public immutable aboveToken; // Address of the deployed ABOVE token contract
+
+    // --- Token Economics ---
+    // Example fee: 36.631295142723603933 ABOVE tokens (represented in smallest unit, wei)
+    uint256 public constant CAMPAIGN_CREATION_FEE = 36631295142723603933 wei;
+    // Example reward calculation: Ru = Tu * (0.1618 / 100)
+    // Represented via integer arithmetic: (balance * 1618) / 1000000
+    // This means D = 0.1618%
 
     // --- Data Structures ---
-
-    // Address of the deployed VoterRegistry contract
+    // Address of the deployed VoterRegistry contract (kept for potential future use or admin functions)
     address public voterRegistry;
 
     // --- Campaign Management ---
@@ -28,72 +40,65 @@ contract ABOVEBallot is Ownable {
     struct Campaign {
         uint256 id;
         CampaignType campaignType;
-        string description; // Moved description into the struct
-        bool isActive; // Is this the "active" campaign for voting?
-        bool isFinalized; // Is setup complete and voting closed?
+        string description;
+        bool isActive;
+        bool isFinalized;
         uint256 createdAt;
-        uint256 finalizedAt; // Optional: timestamp when finalized
-        // Future: Add start/end times for voting periods?
+        uint256 finalizedAt;
+        address creator; // <-- NEW: Record the creator of the campaign
     }
 
     // Store campaign metadata by ID
     mapping(uint256 => Campaign) public campaigns;
 
-    // --- NEW: Dynamic Counters for Efficient Reset ---
-    // Track the number of choices/candidates for efficient clearing in resetCampaign
+    // --- NEW: Dynamic Counters for Efficient Reset (Kept from previous version) ---
     mapping(uint256 => uint256) private _basicChoiceCounts;
     mapping(uint256 => uint256) private _ballotCandidateCounts;
     // --- END NEW ---
 
     // --- Voting Tracking (per campaign) ---
-    // Track if an address has voted in a specific campaign
     mapping(uint256 => mapping(address => bool)) public hasVotedInCampaign;
-    mapping(uint256 => uint256) public totalVotesPerCampaign; // Total votes cast per campaign
+    mapping(uint256 => uint256) public totalVotesPerCampaign;
 
     // --- Basic Voting Campaign Data (per campaign) ---
     mapping(uint256 => string[]) public basicChoicesByCampaign;
     mapping(uint256 => mapping(uint256 => uint256)) public basicChoiceVotesByCampaign;
-    mapping(uint256 => bool) public isBasicSingleVoteByCampaign; // True = single selection, False = multiple allowed
+    mapping(uint256 => bool) public isBasicSingleVoteByCampaign;
 
     // --- Ballot Type Campaign Data (per campaign) ---
     struct Position {
         string name;
         uint8 maxSelections;
         uint256 candidateCount;
-        // Future: Add metadata?
     }
 
     struct Candidate {
         string name;
-        uint256 positionIndex; // Index in the `positions` array for this campaign
-        // Future: Add candidate ID, metadata, etc.
+        uint256 positionIndex;
     }
 
     mapping(uint256 => Position[]) public positionsByCampaign;
     mapping(uint256 => Candidate[]) public candidatesByCampaign;
-    mapping(uint256 => mapping(uint256 => uint256)) public candidateVotesByCampaign; // key: (campaignId, candidate ID)
+    mapping(uint256 => mapping(uint256 => uint256)) public candidateVotesByCampaign;
 
     // --- Events ---
-    // Update events to include campaignId
-    event CampaignCreated(uint256 indexed campaignId, CampaignType campaignType, string description);
+    // Update events to include campaignId and potentially creator
+    event CampaignCreated(uint256 indexed campaignId, CampaignType campaignType, string description, address indexed creator); // <-- UPDATED EVENT
     event CampaignDescriptionSet(uint256 indexed campaignId, string description);
-    event CampaignActivated(uint256 indexed campaignId); // New event for activation
-    event CampaignDeactivated(uint256 indexed campaignId); // New event for deactivation
+    event CampaignActivated(uint256 indexed campaignId);
+    event CampaignDeactivated(uint256 indexed campaignId);
     event BasicCampaignSet(uint256 indexed campaignId, string[] choices, bool isSingleVote);
     event BallotPositionAdded(uint256 indexed campaignId, uint256 indexed positionIndex, string name, uint8 maxSelections);
     event CandidateAdded(uint256 indexed campaignId, uint256 indexed candidateId, string name, uint256 positionIndex);
-    event CandidatesAdded(uint256 indexed campaignId, uint256 indexed positionIndex, uint256 count); // New event for batch add
+    event CandidatesAdded(uint256 indexed campaignId, uint256 indexed positionIndex, uint256 count);
     event BallotCampaignFinalized(uint256 indexed campaignId);
     event VoteCastBasic(uint256 indexed campaignId, address indexed voter, uint256[] selectedChoices);
     event VoteCastBallot(uint256 indexed campaignId, address indexed voter, uint256[] selectedCandidates);
-    // --- NEW EVENT for Reset ---
-    /**
-     * @dev Emitted when a campaign is reset by the owner.
-     * @param campaignId The ID of the campaign that was reset.
-     */
-    event CampaignReset(uint256 indexed campaignId);
-    // --- END NEW EVENT ---
-    // --- End Events ---
+    event CampaignReset(uint256 indexed campaignId); // Kept from previous version
+    // --- NEW EVENTS for Token Integration ---
+    event CampaignCreationFeePaid(address indexed creator, uint256 amount);
+    event VoterRewarded(address indexed voter, uint256 amount); // Amount now reflects dynamic calculation
+    // --- END NEW EVENTS ---
 
     // --- Modifiers ---
     // Update modifiers to work with campaignId
@@ -102,16 +107,16 @@ contract ABOVEBallot is Ownable {
         _;
     }
 
+    // --- UPDATED MODIFIER for Simplified Testnet Eligibility ---
+    /**
+     * @dev Modifier to check if the sender is eligible to vote.
+     *      For this testnet version, eligibility is determined by holding > 0 ABOVE tokens.
+     */
     modifier onlyIfEligible() {
-        // Interact with VoterRegistry contract to check eligibility
-        (bool success, bytes memory data) = voterRegistry.staticcall(
-            abi.encodeWithSignature("isAllowed(address)", msg.sender)
-        );
-        require(success, "ABOVEBallot: Failed to check voter eligibility.");
-        bool isAllowed = abi.decode(data, (bool));
-        require(isAllowed, "ABOVEBallot: You are not eligible to vote.");
+        require(IERC20(aboveToken).balanceOf(msg.sender) > 0, "ABOVEBallot: Must hold ABOVE tokens to vote (Testnet).");
         _;
     }
+    // --- END UPDATED MODIFIER ---
 
     modifier onlyValidCampaign(uint256 campaignId) {
         require(campaigns[campaignId].id != 0, "ABOVEBallot: Invalid campaign ID.");
@@ -142,30 +147,55 @@ contract ABOVEBallot is Ownable {
         require(campaigns[campaignId].campaignType == CampaignType.Ballot, "ABOVEBallot: Campaign is not a Ballot type.");
         _;
     }
-    // --- End Modifiers ---
+
+    // --- NEW MODIFIER for Creator-Restricted Actions ---
+    /**
+     * @dev Modifier to restrict access to the creator of a specific campaign.
+     * @param campaignId The ID of the campaign.
+     */
+    modifier onlyCampaignCreator(uint256 campaignId) {
+        require(campaigns[campaignId].creator == msg.sender, "ABOVEBallot: Only the campaign creator can perform this action.");
+        _;
+    }
+    // --- END NEW MODIFIER ---
 
     // --- Constructor ---
     /**
-     * @dev Constructor that sets the VoterRegistry address and the initial owner.
+     * @dev Constructor that sets the VoterRegistry address, the ABOVE token address, and potentially the initial owner for admin functions.
      * @param _voterRegistryAddress The address of the deployed VoterRegistry contract.
+     * @param _aboveTokenAddress The address of the deployed ABOVE token contract.
      */
-    constructor(address _voterRegistryAddress) Ownable(msg.sender) {
+    constructor(address _voterRegistryAddress, address _aboveTokenAddress) /* Ownable(msg.sender) - Optional: Keep for global admin if needed */ {
         require(_voterRegistryAddress != address(0), "ABOVEBallot: Invalid VoterRegistry address");
+        require(_aboveTokenAddress != address(0), "ABOVEBallot: Invalid ABOVE token address");
         voterRegistry = _voterRegistryAddress;
+        aboveToken = IERC20(_aboveTokenAddress); // Initialize the token interface
         _nextCampaignId = 1; // Start IDs from 1
+        // Transfer ownership if using Ownable for global admin
+        // transferOwnership(msg.sender); // Uncomment if using Ownable for global admin functions
     }
     // --- End Constructor ---
 
     // --- Campaign Management Functions ---
 
     /**
-     * @dev Creates a new campaign entry. Only the owner can call this.
+     * @dev Creates a new campaign entry. Anyone can call this, provided they pay the fee.
+     *      Requires payment of CAMPAIGN_CREATION_FEE in ABOVE tokens.
      * @param _description A description for the campaign.
      * @param _type The type of campaign (Basic or Ballot).
      * @return campaignId The unique ID of the newly created campaign.
      */
-    function createCampaign(string memory _description, CampaignType _type) external onlyOwner returns (uint256 campaignId) {
+    function createCampaign(string memory _description, CampaignType _type) external /* onlyOwner REMOVED */ returns (uint256 campaignId) {
         require(_type != CampaignType.Undefined, "ABOVEBallot: Campaign type cannot be Undefined.");
+
+        // --- Token Fee Collection ---
+        // Require the creator to have pre-approved the ABOVEBallot contract to spend the fee
+        require(aboveToken.allowance(msg.sender, address(this)) >= CAMPAIGN_CREATION_FEE, "ABOVEBallot: Insufficient ABOVE token allowance for campaign creation fee.");
+        // Transfer the fee from the creator to this contract
+        require(aboveToken.transferFrom(msg.sender, address(this), CAMPAIGN_CREATION_FEE), "ABOVEBallot: Campaign creation fee transfer failed.");
+        emit CampaignCreationFeePaid(msg.sender, CAMPAIGN_CREATION_FEE);
+        // --- End Token Fee Collection ---
+
         campaignId = _nextCampaignId;
         _nextCampaignId++;
 
@@ -176,22 +206,23 @@ contract ABOVEBallot is Ownable {
             isActive: false, // Created campaigns start inactive
             isFinalized: false,
             createdAt: block.timestamp,
-            finalizedAt: 0
+            finalizedAt: 0,
+            creator: msg.sender // <-- RECORD CREATOR
         });
 
-        emit CampaignCreated(campaignId, _type, _description);
+        emit CampaignCreated(campaignId, _type, _description, msg.sender); // <-- EMIT CREATOR IN EVENT
         return campaignId;
     }
 
     /**
      * @dev Sets the description for a specific campaign.
-     *      Only the owner can call this.
+     *      Only the campaign creator can call this.
      *      Can be called before or after finalization.
      * @param campaignId The ID of the campaign.
      * @param _description The description of the campaign.
      */
     function setCampaignDescription(uint256 campaignId, string calldata _description) external
-        onlyOwner
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
     {
         // Allow setting description even if active or finalized?
@@ -201,12 +232,17 @@ contract ABOVEBallot is Ownable {
     }
 
     /**
-     * @dev Activates a campaign for voting. Only the owner can call this.
+     * @dev Activates a campaign for voting.
+     *      Only the campaign creator can call this.
      *      Deactivates any currently active campaign.
      *      NOTE: Activation is now allowed for finalized campaigns (e.g., to reactivate results).
      * @param campaignId The ID of the campaign to activate.
      */
-    function activateCampaign(uint256 campaignId) external onlyOwner onlyValidCampaign(campaignId) /* onlyUnfinalizedCampaign removed */ {
+    function activateCampaign(uint256 campaignId) external
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
+        onlyValidCampaign(campaignId)
+        /* onlyUnfinalizedCampaign removed */
+    {
         // Deactivate the currently active campaign, if any
         for (uint256 i = 1; i < _nextCampaignId; i++) {
             if (campaigns[i].isActive) {
@@ -219,10 +255,14 @@ contract ABOVEBallot is Ownable {
     }
 
     /**
-     * @dev Deactivates a campaign. Only the owner can call this.
+     * @dev Deactivates a campaign.
+     *      Only the campaign creator can call this.
      * @param campaignId The ID of the campaign to deactivate.
      */
-     function deactivateCampaign(uint256 campaignId) external onlyOwner onlyValidCampaign(campaignId) {
+     function deactivateCampaign(uint256 campaignId) external
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
+        onlyValidCampaign(campaignId)
+     {
         // Check if it's the active campaign
         if (campaigns[campaignId].isActive) {
             campaigns[campaignId].isActive = false;
@@ -231,112 +271,90 @@ contract ABOVEBallot is Ownable {
         // If it's not active, this call effectively does nothing but is allowed.
      }
 
-    // --- NEW FUNCTION: Campaign Reset ---
+    // --- NEW FUNCTION: Campaign Reset (Kept from previous version, restricted to creator if desired) ---
     /**
-     * @dev Allows the owner to reset a finalized campaign, clearing all its associated data
-     *      and reverting it to an inactive, unfinalized state. This prepares the campaign ID
-     *      for potential reuse with a new setup.
+     * @dev Allows the owner/campaign creator to reset a finalized campaign.
+     *      Clears all its associated data and reverts it to an inactive, unfinalized state.
      *      USE WITH CAUTION: This action is irreversible for the current campaign instance.
-     *      The blockchain transaction history for the previous campaign instance remains immutable.
      * @param campaignId The ID of the campaign to reset.
      */
-    function resetCampaign(uint256 campaignId) external onlyOwner onlyValidCampaign(campaignId) onlyFinalizedCampaign(campaignId) {
+    function resetCampaign(uint256 campaignId) external
+        onlyCampaignCreator(campaignId) // <-- RESTRICT TO CREATOR OR KEEP OWNER ONLY?
+        onlyValidCampaign(campaignId)
+        onlyFinalizedCampaign(campaignId)
+    {
         // --- Clear Basic Campaign Data (if applicable) ---
         if (campaigns[campaignId].campaignType == CampaignType.Basic) {
-            // Delete choices array and votes mapping for this campaign
             delete basicChoicesByCampaign[campaignId];
-            // Use dynamic count for efficient clearing
             uint256 choiceCount = _basicChoiceCounts[campaignId];
             for (uint256 i = 0; i < choiceCount; i++) {
                  delete basicChoiceVotesByCampaign[campaignId][i];
             }
             delete isBasicSingleVoteByCampaign[campaignId];
-            // Clear the dynamic count
             delete _basicChoiceCounts[campaignId];
         }
 
         // --- Clear Ballot Campaign Data (if applicable) ---
         if (campaigns[campaignId].campaignType == CampaignType.Ballot) {
-            // Delete positions and candidates arrays
             delete positionsByCampaign[campaignId];
             delete candidatesByCampaign[campaignId];
-            // Clear candidate votes mapping for this campaign using dynamic count
             uint256 candidateCount = _ballotCandidateCounts[campaignId];
             for (uint256 i = 0; i < candidateCount; i++) {
                  delete candidateVotesByCampaign[campaignId][i];
             }
-            // Clear the dynamic count
             delete _ballotCandidateCounts[campaignId];
         }
 
         // --- Clear General Voting Tracking for this Campaign ---
-        // Note: `hasVotedInCampaign[campaignId][*]` entries remain due to mapping limitations.
-        // Voters from the old instance will still show `hasVoted=true` for this ID until they
-        // try to vote again (which will fail due to the campaign being reset/unfinalized).
-        // This is a limitation of the mapping structure for large, unknown sets.
-        // The `totalVotesPerCampaign` is easy to reset.
         delete totalVotesPerCampaign[campaignId];
 
         // --- Reset Campaign Metadata Flags ---
-        // Revert the campaign to its initial state: inactive and not finalized.
         Campaign storage campaign = campaigns[campaignId];
         campaign.isActive = false;
         campaign.isFinalized = false;
         campaign.finalizedAt = 0;
-        // Optionally clear the description if desired on reset
-        // campaign.description = "";
-        // Note: campaignType, id, and createdAt remain unchanged.
 
-        // --- Emit Event ---
         emit CampaignReset(campaignId);
     }
     // --- END NEW FUNCTION ---
 
-
-    // --- Basic Voting Functions (Updated to use campaignId) ---
+    // --- Basic Voting Functions (Updated to use campaignId and creator restrictions) ---
 
     /**
-     * @dev Sets up a basic voting campaign. Only the owner can call this.
+     * @dev Sets up a basic voting campaign.
+     *      Only the campaign creator can call this.
      *      Can only be called if the campaign is not yet finalized.
-     *      *** MODIFICATION: Finalizes the campaign upon setup ***
+     *      Finalizes the campaign upon setup.
      * @param campaignId The ID of the campaign to configure.
      * @param _choices The list of choices/options for voters.
      * @param _isSingleVote True if voters can only select one option, false for multiple selections.
      */
     function setBasicCampaign(uint256 campaignId, string[] memory _choices, bool _isSingleVote) external
-        onlyOwner
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
         onlyUnfinalizedCampaign(campaignId)
-        onlyBasicCampaign(campaignId) // Ensure the campaign type is Basic
+        onlyBasicCampaign(campaignId)
     {
         require(_choices.length > 0, "ABOVEBallot: Must provide at least one choice.");
 
-        // Clear any previous data if needed (though should be empty for a new/unfinalized campaign)
-        // --- REMOVED: delete basicChoicesByCampaign[campaignId]; // Cannot delete entire mapping
-        // --- REMOVED: delete basicChoiceVotesByCampaign[campaignId]; // Cannot delete entire mapping
-
-        // Populate the choices array for this campaign
         for (uint i = 0; i < _choices.length; i++) {
             basicChoicesByCampaign[campaignId].push(_choices[i]);
-            // Initialize vote counts for each new choice index
             basicChoiceVotesByCampaign[campaignId][i] = 0;
         }
         isBasicSingleVoteByCampaign[campaignId] = _isSingleVote;
 
-        // --- NEW: Update Dynamic Count ---
         _basicChoiceCounts[campaignId] = _choices.length;
-        // --- END NEW ---
 
-        // --- KEY MODIFICATION: Finalize the campaign upon setup ---
+        // Finalize the campaign upon setup
         campaigns[campaignId].isFinalized = true;
         campaigns[campaignId].finalizedAt = block.timestamp;
-        // --- END KEY MODIFICATION ---
 
         emit BasicCampaignSet(campaignId, _choices, _isSingleVote);
     }
 
     /**
      * @dev Allows an eligible voter to cast their vote(s) in a basic campaign.
+     *      Distributes a dynamic reward based on the voter's ABOVE token balance.
      * @param campaignId The ID of the campaign to vote in.
      * @param _selectedChoiceIndices An array of indices corresponding to the chosen options.
      */
@@ -353,12 +371,10 @@ contract ABOVEBallot is Ownable {
         }
 
         string[] storage choicesForCampaign = basicChoicesByCampaign[campaignId];
-        // Validate choices
         for (uint i = 0; i < _selectedChoiceIndices.length; i++) {
             require(_selectedChoiceIndices[i] < choicesForCampaign.length, "ABOVEBallot: Invalid choice index.");
         }
 
-        // Record the vote(s)
         for (uint i = 0; i < _selectedChoiceIndices.length; i++) {
             basicChoiceVotesByCampaign[campaignId][_selectedChoiceIndices[i]] += 1;
         }
@@ -366,6 +382,22 @@ contract ABOVEBallot is Ownable {
         totalVotesPerCampaign[campaignId] += 1;
 
         emit VoteCastBasic(campaignId, msg.sender, _selectedChoiceIndices);
+
+        // --- Dynamic Voter Reward Calculation and Distribution ---
+        uint256 voterTokenBalance = aboveToken.balanceOf(msg.sender);
+        // Example Dividend Rate D = 0.1618 (represents 0.1618%)
+        // Ru = Tu * (D / 100) => Multiply balance by 1618, then divide by 1000000 (which is 100 * 10000, the latter for scaling 0.1618 to 1618)
+        // Using 1618 and 1000000 makes the calculation D = 0.1618%
+        uint256 calculatedReward = (voterTokenBalance * 1618) / 1000000;
+
+        if (calculatedReward > 0) {
+            // Attempt to transfer the calculated reward to the voter
+            require(aboveToken.transfer(msg.sender, calculatedReward), "ABOVEBallot: Dynamic voter reward transfer failed.");
+            emit VoterRewarded(msg.sender, calculatedReward); // Emit the calculated amount
+        } else {
+             emit VoterRewarded(msg.sender, 0); // Handle zero reward case
+        }
+        // --- End Dynamic Voter Reward Distribution ---
     }
 
     /**
@@ -377,7 +409,7 @@ contract ABOVEBallot is Ownable {
     function getBasicResults(uint256 campaignId) external view
         onlyValidCampaign(campaignId)
         onlyBasicCampaign(campaignId)
-        onlyFinalizedCampaign(campaignId) // Or allow viewing results of active campaigns?
+        onlyFinalizedCampaign(campaignId)
         returns (string[] memory choices, uint256[] memory votes)
     {
         choices = basicChoicesByCampaign[campaignId];
@@ -388,17 +420,18 @@ contract ABOVEBallot is Ownable {
         return (choices, votes);
     }
 
-    // --- Ballot Type Voting Functions (Updated to use campaignId) ---
+    // --- Ballot Type Voting Functions (Updated to use campaignId and creator restrictions) ---
 
     /**
-     * @dev Adds a position for the ballot type campaign. Only the owner can call this.
+     * @dev Adds a position for the ballot type campaign.
+     *      Only the campaign creator can call this.
      *      Can only be called before the ballot campaign is finalized.
      * @param campaignId The ID of the campaign.
      * @param _name The name of the position.
      * @param _maxSelections The maximum number of candidates a voter can select for this position.
      */
     function addBallotPosition(uint256 campaignId, string memory _name, uint8 _maxSelections) external
-        onlyOwner
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
         onlyUnfinalizedCampaign(campaignId)
         onlyBallotCampaign(campaignId)
@@ -412,14 +445,15 @@ contract ABOVEBallot is Ownable {
     }
 
     /**
-     * @dev Adds a candidate for a specific position in the ballot type campaign. Only the owner can call this.
+     * @dev Adds a candidate for a specific position in the ballot type campaign.
+     *      Only the campaign creator can call this.
      *      Can only be called before the ballot campaign is finalized.
      * @param campaignId The ID of the campaign.
      * @param _name The name of the candidate.
      * @param _positionIndex The index of the position this candidate is running for.
      */
     function addCandidate(uint256 campaignId, string memory _name, uint256 _positionIndex) external
-        onlyOwner
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
         onlyUnfinalizedCampaign(campaignId)
         onlyBallotCampaign(campaignId)
@@ -431,22 +465,21 @@ contract ABOVEBallot is Ownable {
         candidatesByCampaign[campaignId].push(Candidate({name: _name, positionIndex: _positionIndex}));
         positionsByCampaign[campaignId][_positionIndex].candidateCount += 1;
 
-        // --- NEW: Update Dynamic Count ---
         _ballotCandidateCounts[campaignId] += 1;
-        // --- END NEW ---
 
         emit CandidateAdded(campaignId, newCandidateId, _name, _positionIndex);
     }
 
     /**
-     * @dev Adds multiple candidates for a specific position in the ballot type campaign. Only the owner can call this.
+     * @dev Adds multiple candidates for a specific position in the ballot type campaign.
+     *      Only the campaign creator can call this.
      *      Can only be called before the ballot campaign is finalized.
      * @param campaignId The ID of the campaign.
      * @param _names An array of names for the candidates.
      * @param _positionIndex The index of the position these candidates are running for.
      */
     function addCandidates(uint256 campaignId, string[] memory _names, uint256 _positionIndex) external
-        onlyOwner
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
         onlyUnfinalizedCampaign(campaignId)
         onlyBallotCampaign(campaignId)
@@ -459,33 +492,28 @@ contract ABOVEBallot is Ownable {
             require(bytes(_names[i]).length > 0, "ABOVEBallot: Candidate name cannot be empty.");
             uint256 newCandidateId = candidatesByCampaign[campaignId].length;
             candidatesByCampaign[campaignId].push(Candidate({name: _names[i], positionIndex: _positionIndex}));
-            // Note: We don't emit CandidateAdded for each in a batch to avoid event spam.
-            // The final count increment and single event emission cover the batch.
         }
         positionsByCampaign[campaignId][_positionIndex].candidateCount += uint256(_names.length); // Increment count
 
-        // --- NEW: Update Dynamic Count ---
         _ballotCandidateCounts[campaignId] += _names.length;
-        // --- END NEW ---
 
-        // Emit a single event for the batch
         emit CandidatesAdded(campaignId, _positionIndex, _names.length);
     }
 
     /**
-     * @dev Finalizes the ballot campaign setup. Only the owner can call this.
+     * @dev Finalizes the ballot campaign setup.
+     *      Only the campaign creator can call this.
      *      After this, no more positions or candidates can be added.
      * @param campaignId The ID of the campaign to finalize.
      */
     function finalizeBallotSetup(uint256 campaignId) external
-        onlyOwner
+        onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
         onlyUnfinalizedCampaign(campaignId)
         onlyBallotCampaign(campaignId)
     {
         require(positionsByCampaign[campaignId].length > 0, "ABOVEBallot: Must have at least one position.");
 
-        // Initialize candidate vote counts
         Candidate[] storage candidatesForCampaign = candidatesByCampaign[campaignId];
         for (uint i = 0; i < candidatesForCampaign.length; i++) {
             candidateVotesByCampaign[campaignId][i] = 0;
@@ -499,6 +527,7 @@ contract ABOVEBallot is Ownable {
 
     /**
      * @dev Allows an eligible voter to cast their vote(s) in a ballot type campaign.
+     *      Distributes a dynamic reward based on the voter's ABOVE token balance.
      * @param campaignId The ID of the campaign to vote in.
      * @param _selectedCandidateIds An array of candidate IDs the voter is selecting.
      */
@@ -514,8 +543,7 @@ contract ABOVEBallot is Ownable {
         Candidate[] storage candidatesForCampaign = candidatesByCampaign[campaignId];
         Position[] storage positionsForCampaign = positionsByCampaign[campaignId];
 
-        // --- Validation Logic (similar to before, but scoped to campaign) ---
-        // 1. Check for duplicate candidate selections
+        // --- Validation Logic ---
         for (uint i = 0; i < _selectedCandidateIds.length; i++) {
             require(_selectedCandidateIds[i] < candidatesForCampaign.length, "ABOVEBallot: Invalid candidate ID.");
             for (uint j = i + 1; j < _selectedCandidateIds.length; j++) {
@@ -523,7 +551,6 @@ contract ABOVEBallot is Ownable {
             }
         }
 
-        // 2. & 3. Group by position and check limits
         for (uint p = 0; p < positionsForCampaign.length; p++) {
             uint8 selectionsForThisPosition = 0;
             for (uint i = 0; i < _selectedCandidateIds.length; i++) {
@@ -543,6 +570,21 @@ contract ABOVEBallot is Ownable {
         totalVotesPerCampaign[campaignId] += 1;
 
         emit VoteCastBallot(campaignId, msg.sender, _selectedCandidateIds);
+
+        // --- Dynamic Voter Reward Calculation and Distribution ---
+        uint256 voterTokenBalance = aboveToken.balanceOf(msg.sender);
+        // Example Dividend Rate D = 0.1618 (represents 0.1618%)
+        // Ru = Tu * (D / 100) => Multiply balance by 1618, then divide by 1000000
+        uint256 calculatedReward = (voterTokenBalance * 1618) / 1000000;
+
+        if (calculatedReward > 0) {
+            // Attempt to transfer the calculated reward to the voter
+            require(aboveToken.transfer(msg.sender, calculatedReward), "ABOVEBallot: Dynamic voter reward transfer failed.");
+            emit VoterRewarded(msg.sender, calculatedReward); // Emit the calculated amount
+        } else {
+             emit VoterRewarded(msg.sender, 0); // Handle zero reward case
+        }
+        // --- End Dynamic Voter Reward Distribution ---
     }
 
     /**
