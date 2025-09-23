@@ -30,6 +30,7 @@ type Campaign = {
   isFinalized: boolean; // bool
   createdAt: bigint; // uint256
   finalizedAt: bigint; // uint256
+  creator: Address; // address - Add the creator field
   [key: string]: any; // Catch-all for potential ABI mismatch
 };
 
@@ -42,6 +43,10 @@ type Campaign = {
  * Provides functions to get campaign info, check vote status, cast votes, and manage campaigns.
  * This version aims for better compatibility with TypeScript/Viem/Wagmi typing.
  * Includes logic to fetch the contract owner.
+ * Integrates with the native ABOVE token for fees and rewards.
+ * Supports decentralized campaign creation and management.
+ * Voter eligibility is simplified for testnet (must hold ABOVE tokens).
+ * Introduces an 'endCampaign' function for formal conclusion and result recording.
  */
 export const useABOVEBallot = (campaignId: bigint | null) => {
   const { address: userAddress } = useAccount();
@@ -250,7 +255,7 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
   };
   // --- END Existing: Voting Functions ---
 
-  // --- NEW: Campaign Setup Functions ---
+  // --- NEW: Campaign Management Functions ---
 
   // --- 1. createCampaign ---
   const {
@@ -447,30 +452,40 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- NEW: 10. resetCampaign ---
+  // --- NEW: 10. endCampaign ---
+  /**
+   * @dev Hook function to trigger the endCampaign transaction on the blockchain.
+   *      Only the campaign creator can call this.
+   * @param campaignIdToFinalize The ID of the campaign to end.
+   */
   const {
-    writeContract: resetCampaignWrite,
-    isPending: isResettingCampaign, // <-- New loading state
-    isSuccess: isResetCampaignSuccess, // <-- New success state
-    isError: isResetCampaignError, // <-- New error state
-    error: resetCampaignError, // <-- New error object
+    writeContract: endCampaignWrite,
+    isPending: isEndingCampaign, // <-- New loading state
+    isSuccess: isEndCampaignSuccess, // <-- New success state
+    isError: isEndCampaignError, // <-- New error state
+    error: endCampaignError, // <-- New error object
   } = useWriteContract();
 
-  const handleResetCampaign = () => {
-    if (campaignId === null) {
-      console.error("Cannot reset campaign: campaignId is null");
-      return;
+  /**
+   * @dev Handler function to prepare and execute the endCampaign write contract call.
+   * @param campaignIdToFinalize The ID of the campaign to end.
+   */
+  const handleEndCampaign = (campaignIdToFinalize: bigint) => { // Accept campaignId as argument
+    // Use the argument passed to the handler function
+    if (campaignIdToFinalize === null) {
+        console.error("Cannot end campaign: campaignId is null");
+        return;
     }
-    resetCampaignWrite({
+    endCampaignWrite({
       address: CONTRACT_ADDRESSES.aboveBallot,
       abi: ABOVE_BALLOT_ABI,
-      functionName: 'resetCampaign',
-      args: [campaignId],
+      functionName: 'endCampaign',
+      args: [campaignIdToFinalize], // Pass the argument received by the handler
     });
   };
-  // --- END NEW: resetCampaign ---
+  // --- END NEW: endCampaign ---
 
-  // --- END NEW: Campaign Setup Functions ---
+  // --- END NEW: Campaign Management Functions ---
 
   // --- Return Values ---
   return {
@@ -602,12 +617,12 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isFinalizeBallotSetupError,
     finalizeBallotSetupError,
 
-    // --- NEW: Reset Campaign ---
-    handleResetCampaign, // <-- Export the new handler
-    isResettingCampaign, // <-- Export the new loading state
-    isResetCampaignSuccess, // <-- Export the new success state
-    isResetCampaignError, // <-- Export the new error state
-    resetCampaignError, // <-- Export the new error object
+    // --- NEW: End Campaign ---
+    handleEndCampaign, // <-- Export the new handler
+    isEndingCampaign, // <-- Export the new loading state
+    isEndCampaignSuccess, // <-- Export the new success state
+    isEndCampaignError, // <-- Export the new error state
+    endCampaignError, // <-- Export the new error object
     // --- END NEW ---
     // --- END Campaign Management ---
   };

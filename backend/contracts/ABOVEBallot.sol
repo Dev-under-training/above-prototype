@@ -8,13 +8,15 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // Import IERC20 for AB
  * @title ABOVEBallot
  * @dev A flexible smart contract for managing multiple voting campaigns.
  *      Supports Basic Voting (single/multiple choice) and Ballot Type Voting (structured positions/candidates).
- *      Integrates with the native ABOVE token for campaign creation fees and voter rewards.
+ *      Integrates with VoterRegistry for eligibility checks.
  *      Campaigns are identified by unique IDs for immutability and historical access.
+ *      Integrates with the native ABOVE token for campaign creation fees and voter rewards.
  *      Campaign creation is decentralized (anyone can create, paying a fee).
  *      Campaign configuration is restricted to the creator.
  *      Voter eligibility is simplified for testnet (must hold ABOVE tokens).
  *      This version focuses on core multi-campaign logic with tokenomics and decentralization.
  *      Future versions will integrate advanced cryptography for anonymity.
+ *      Introduces an 'endCampaign' function for formal conclusion and result recording.
  */
 contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functions like setting fees */ {
 
@@ -27,6 +29,8 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
     // Example reward calculation: Ru = Tu * (0.1618 / 100)
     // Represented via integer arithmetic: (balance * 1618) / 1000000
     // This means D = 0.1618%
+    uint256 public constant VOTER_REWARD_DIVISOR = 1000000; // Denominator for reward calculation
+    uint256 public constant VOTER_REWARD_MULTIPLIER = 1618; // Numerator for reward calculation (0.1618%)
 
     // --- Data Structures ---
     // Address of the deployed VoterRegistry contract (kept for potential future use or admin functions)
@@ -41,64 +45,88 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         uint256 id;
         CampaignType campaignType;
         string description;
-        bool isActive;
-        bool isFinalized;
+        bool isActive; // Is this the "active" campaign for voting?
+        bool isFinalized; // Is setup complete and voting closed?
         uint256 createdAt;
-        uint256 finalizedAt;
+        uint256 finalizedAt; // Optional: timestamp when finalized
         address creator; // <-- NEW: Record the creator of the campaign
+        // Future: Add start/end times for voting periods?
     }
 
     // Store campaign metadata by ID
     mapping(uint256 => Campaign) public campaigns;
 
-    // --- NEW: Dynamic Counters for Efficient Reset (Kept from previous version) ---
+    // --- NEW: Dynamic Counters for Efficient Reset ---
+    // Track the number of choices/candidates for efficient clearing in resetCampaign
     mapping(uint256 => uint256) private _basicChoiceCounts;
     mapping(uint256 => uint256) private _ballotCandidateCounts;
     // --- END NEW ---
 
+    // --- NEW: Persistent Storage for Final Campaign Results ---
+    // These mappings store the final, immutable results of a campaign upon ending.
+    mapping(uint256 => string[]) public finalBasicChoicesByCampaign;
+    mapping(uint256 => uint256[]) public finalBasicVotesByCampaign;
+    mapping(uint256 => Position[]) public finalBallotPositionsByCampaign;
+    mapping(uint256 => Candidate[]) public finalBallotCandidatesByCampaign;
+    mapping(uint256 => uint256[]) public finalBallotCandidateVotesByCampaign;
+    // --- END NEW ---
+
     // --- Voting Tracking (per campaign) ---
+    // Track if an address has voted in a specific campaign
     mapping(uint256 => mapping(address => bool)) public hasVotedInCampaign;
-    mapping(uint256 => uint256) public totalVotesPerCampaign;
+    mapping(uint256 => uint256) public totalVotesPerCampaign; // Total votes cast per campaign
 
     // --- Basic Voting Campaign Data (per campaign) ---
     mapping(uint256 => string[]) public basicChoicesByCampaign;
     mapping(uint256 => mapping(uint256 => uint256)) public basicChoiceVotesByCampaign;
-    mapping(uint256 => bool) public isBasicSingleVoteByCampaign;
+    mapping(uint256 => bool) public isBasicSingleVoteByCampaign; // True = single selection, False = multiple allowed
 
     // --- Ballot Type Campaign Data (per campaign) ---
     struct Position {
         string name;
         uint8 maxSelections;
         uint256 candidateCount;
+        // Future: Add metadata?
     }
 
     struct Candidate {
         string name;
-        uint256 positionIndex;
+        uint256 positionIndex; // Index in the `positions` array for this campaign
+        // Future: Add candidate ID, metadata, etc.
     }
 
     mapping(uint256 => Position[]) public positionsByCampaign;
     mapping(uint256 => Candidate[]) public candidatesByCampaign;
-    mapping(uint256 => mapping(uint256 => uint256)) public candidateVotesByCampaign;
+    mapping(uint256 => mapping(uint256 => uint256)) public candidateVotesByCampaign; // key: (campaignId, candidate ID)
 
     // --- Events ---
     // Update events to include campaignId and potentially creator
     event CampaignCreated(uint256 indexed campaignId, CampaignType campaignType, string description, address indexed creator); // <-- UPDATED EVENT
     event CampaignDescriptionSet(uint256 indexed campaignId, string description);
-    event CampaignActivated(uint256 indexed campaignId);
-    event CampaignDeactivated(uint256 indexed campaignId);
+    event CampaignActivated(uint256 indexed campaignId); // New event for activation
+    event CampaignDeactivated(uint256 indexed campaignId); // New event for deactivation
     event BasicCampaignSet(uint256 indexed campaignId, string[] choices, bool isSingleVote);
     event BallotPositionAdded(uint256 indexed campaignId, uint256 indexed positionIndex, string name, uint8 maxSelections);
     event CandidateAdded(uint256 indexed campaignId, uint256 indexed candidateId, string name, uint256 positionIndex);
-    event CandidatesAdded(uint256 indexed campaignId, uint256 indexed positionIndex, uint256 count);
+    event CandidatesAdded(uint256 indexed campaignId, uint256 indexed positionIndex, uint256 count); // New event for batch add
     event BallotCampaignFinalized(uint256 indexed campaignId);
     event VoteCastBasic(uint256 indexed campaignId, address indexed voter, uint256[] selectedChoices);
     event VoteCastBallot(uint256 indexed campaignId, address indexed voter, uint256[] selectedCandidates);
-    event CampaignReset(uint256 indexed campaignId); // Kept from previous version
-    // --- NEW EVENTS for Token Integration ---
+    // --- REMOVED: CampaignReset event ---
+    // event CampaignReset(uint256 indexed campaignId);
+    // --- END REMOVED ---
+    // --- NEW EVENT for End Campaign ---
+    /**
+     * @dev Emitted when a campaign is formally ended by its creator.
+     *      Indicates that final results have been recorded on-chain.
+     * @param campaignId The ID of the campaign that was ended.
+     */
+    event CampaignEnded(uint256 indexed campaignId);
+    // --- END NEW EVENT ---
+    // --- Token Events ---
     event CampaignCreationFeePaid(address indexed creator, uint256 amount);
     event VoterRewarded(address indexed voter, uint256 amount); // Amount now reflects dynamic calculation
-    // --- END NEW EVENTS ---
+    // --- End Token Events ---
 
     // --- Modifiers ---
     // Update modifiers to work with campaignId
@@ -271,15 +299,10 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         // If it's not active, this call effectively does nothing but is allowed.
      }
 
-    // --- NEW FUNCTION: Campaign Reset (Kept from previous version, restricted to creator if desired) ---
-    /**
-     * @dev Allows the owner/campaign creator to reset a finalized campaign.
-     *      Clears all its associated data and reverts it to an inactive, unfinalized state.
-     *      USE WITH CAUTION: This action is irreversible for the current campaign instance.
-     * @param campaignId The ID of the campaign to reset.
-     */
+    // --- REMOVED: resetCampaign function ---
+    /*
     function resetCampaign(uint256 campaignId) external
-        onlyCampaignCreator(campaignId) // <-- RESTRICT TO CREATOR OR KEEP OWNER ONLY?
+        onlyOwner // Or onlyCampaignCreator if that was the intended restriction
         onlyValidCampaign(campaignId)
         onlyFinalizedCampaign(campaignId)
     {
@@ -316,6 +339,66 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
 
         emit CampaignReset(campaignId);
     }
+    */
+    // --- END REMOVED ---
+
+    // --- NEW FUNCTION: End Campaign ---
+    /**
+     * @dev Allows the creator of a campaign to formally end it.
+     *      This action records the final vote counts and candidate/choice data on-chain.
+     *      It prevents further voting and marks the campaign as concluded.
+     *      Emits a `CampaignEnded` event with the final results.
+     * @param campaignId The ID of the campaign to end.
+     */
+    function endCampaign(uint256 campaignId) external
+        onlyCampaignCreator(campaignId) // Ensure only the creator can end their campaign
+        onlyValidCampaign(campaignId)
+        onlyFinalizedCampaign(campaignId) // Only allow ending finalized campaigns
+    {
+        Campaign storage campaign = campaigns[campaignId];
+
+        // --- Record Final Results ---
+        // For Basic Campaigns
+        if (campaign.campaignType == CampaignType.Basic) {
+            string[] storage choices = basicChoicesByCampaign[campaignId];
+            uint256[] memory votes = new uint256[](choices.length);
+            for (uint i = 0; i < choices.length; i++) {
+                votes[i] = basicChoiceVotesByCampaign[campaignId][i];
+            }
+            // Store final results in persistent mappings
+            for (uint i = 0; i < choices.length; i++) {
+                finalBasicChoicesByCampaign[campaignId].push(choices[i]);
+                finalBasicVotesByCampaign[campaignId].push(votes[i]);
+            }
+        }
+        // For Ballot Campaigns
+        else if (campaign.campaignType == CampaignType.Ballot) {
+            Position[] storage positions = positionsByCampaign[campaignId];
+            Candidate[] storage candidates = candidatesByCampaign[campaignId];
+            uint256[] memory candidateVotes = new uint256[](candidates.length);
+            for (uint i = 0; i < candidates.length; i++) {
+                candidateVotes[i] = candidateVotesByCampaign[campaignId][i];
+            }
+            // Store final results in persistent mappings
+            for (uint i = 0; i < positions.length; i++) {
+                finalBallotPositionsByCampaign[campaignId].push(positions[i]);
+            }
+            for (uint i = 0; i < candidates.length; i++) {
+                finalBallotCandidatesByCampaign[campaignId].push(candidates[i]);
+                finalBallotCandidateVotesByCampaign[campaignId].push(candidateVotes[i]);
+            }
+        }
+
+        // --- Mark Campaign as Ended (Deactivate if active) ---
+        if (campaign.isActive) {
+            campaign.isActive = false;
+            emit CampaignDeactivated(campaignId);
+        }
+        // Note: Consider adding an 'isEnded' flag to the Campaign struct if you need
+        // a distinct state from 'isFinalized' and '!isActive'.
+
+        emit CampaignEnded(campaignId); // Emit the new event
+    }
     // --- END NEW FUNCTION ---
 
     // --- Basic Voting Functions (Updated to use campaignId and creator restrictions) ---
@@ -333,21 +416,30 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
         onlyUnfinalizedCampaign(campaignId)
-        onlyBasicCampaign(campaignId)
+        onlyBasicCampaign(campaignId) // Ensure the campaign type is Basic
     {
         require(_choices.length > 0, "ABOVEBallot: Must provide at least one choice.");
 
+        // Clear any previous data if needed (though should be empty for a new/unfinalized campaign)
+        // --- REMOVED: delete basicChoicesByCampaign[campaignId]; // Cannot delete entire mapping
+        // --- REMOVED: delete basicChoiceVotesByCampaign[campaignId]; // Cannot delete entire mapping
+
+        // Populate the choices array for this campaign
         for (uint i = 0; i < _choices.length; i++) {
             basicChoicesByCampaign[campaignId].push(_choices[i]);
+            // Initialize vote counts for each new choice index
             basicChoiceVotesByCampaign[campaignId][i] = 0;
         }
         isBasicSingleVoteByCampaign[campaignId] = _isSingleVote;
 
+        // --- NEW: Update Dynamic Count ---
         _basicChoiceCounts[campaignId] = _choices.length;
+        // --- END NEW ---
 
-        // Finalize the campaign upon setup
+        // --- KEY MODIFICATION: Finalize the campaign upon setup ---
         campaigns[campaignId].isFinalized = true;
         campaigns[campaignId].finalizedAt = block.timestamp;
+        // --- END KEY MODIFICATION ---
 
         emit BasicCampaignSet(campaignId, _choices, _isSingleVote);
     }
@@ -371,10 +463,12 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         }
 
         string[] storage choicesForCampaign = basicChoicesByCampaign[campaignId];
+        // Validate choices
         for (uint i = 0; i < _selectedChoiceIndices.length; i++) {
             require(_selectedChoiceIndices[i] < choicesForCampaign.length, "ABOVEBallot: Invalid choice index.");
         }
 
+        // Record the vote(s)
         for (uint i = 0; i < _selectedChoiceIndices.length; i++) {
             basicChoiceVotesByCampaign[campaignId][_selectedChoiceIndices[i]] += 1;
         }
@@ -388,7 +482,7 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         // Example Dividend Rate D = 0.1618 (represents 0.1618%)
         // Ru = Tu * (D / 100) => Multiply balance by 1618, then divide by 1000000 (which is 100 * 10000, the latter for scaling 0.1618 to 1618)
         // Using 1618 and 1000000 makes the calculation D = 0.1618%
-        uint256 calculatedReward = (voterTokenBalance * 1618) / 1000000;
+        uint256 calculatedReward = (voterTokenBalance * VOTER_REWARD_MULTIPLIER) / VOTER_REWARD_DIVISOR;
 
         if (calculatedReward > 0) {
             // Attempt to transfer the calculated reward to the voter
@@ -409,7 +503,7 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
     function getBasicResults(uint256 campaignId) external view
         onlyValidCampaign(campaignId)
         onlyBasicCampaign(campaignId)
-        onlyFinalizedCampaign(campaignId)
+        onlyFinalizedCampaign(campaignId) // Or allow viewing results of active campaigns?
         returns (string[] memory choices, uint256[] memory votes)
     {
         choices = basicChoicesByCampaign[campaignId];
@@ -465,7 +559,9 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         candidatesByCampaign[campaignId].push(Candidate({name: _name, positionIndex: _positionIndex}));
         positionsByCampaign[campaignId][_positionIndex].candidateCount += 1;
 
+        // --- NEW: Update Dynamic Count ---
         _ballotCandidateCounts[campaignId] += 1;
+        // --- END NEW ---
 
         emit CandidateAdded(campaignId, newCandidateId, _name, _positionIndex);
     }
@@ -492,11 +588,16 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
             require(bytes(_names[i]).length > 0, "ABOVEBallot: Candidate name cannot be empty.");
             uint256 newCandidateId = candidatesByCampaign[campaignId].length;
             candidatesByCampaign[campaignId].push(Candidate({name: _names[i], positionIndex: _positionIndex}));
+            // Note: We don't emit CandidateAdded for each in a batch to avoid event spam.
+            // The final count increment and single event emission cover the batch.
         }
         positionsByCampaign[campaignId][_positionIndex].candidateCount += uint256(_names.length); // Increment count
 
+        // --- NEW: Update Dynamic Count ---
         _ballotCandidateCounts[campaignId] += _names.length;
+        // --- END NEW ---
 
+        // Emit a single event for the batch
         emit CandidatesAdded(campaignId, _positionIndex, _names.length);
     }
 
@@ -514,6 +615,7 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
     {
         require(positionsByCampaign[campaignId].length > 0, "ABOVEBallot: Must have at least one position.");
 
+        // Initialize candidate vote counts
         Candidate[] storage candidatesForCampaign = candidatesByCampaign[campaignId];
         for (uint i = 0; i < candidatesForCampaign.length; i++) {
             candidateVotesByCampaign[campaignId][i] = 0;
@@ -543,7 +645,8 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         Candidate[] storage candidatesForCampaign = candidatesByCampaign[campaignId];
         Position[] storage positionsForCampaign = positionsByCampaign[campaignId];
 
-        // --- Validation Logic ---
+        // --- Validation Logic (similar to before, but scoped to campaign) ---
+        // 1. Check for duplicate candidate selections
         for (uint i = 0; i < _selectedCandidateIds.length; i++) {
             require(_selectedCandidateIds[i] < candidatesForCampaign.length, "ABOVEBallot: Invalid candidate ID.");
             for (uint j = i + 1; j < _selectedCandidateIds.length; j++) {
@@ -551,6 +654,7 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
             }
         }
 
+        // 2. & 3. Group by position and check limits
         for (uint p = 0; p < positionsForCampaign.length; p++) {
             uint8 selectionsForThisPosition = 0;
             for (uint i = 0; i < _selectedCandidateIds.length; i++) {
@@ -574,8 +678,9 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
         // --- Dynamic Voter Reward Calculation and Distribution ---
         uint256 voterTokenBalance = aboveToken.balanceOf(msg.sender);
         // Example Dividend Rate D = 0.1618 (represents 0.1618%)
-        // Ru = Tu * (D / 100) => Multiply balance by 1618, then divide by 1000000
-        uint256 calculatedReward = (voterTokenBalance * 1618) / 1000000;
+        // Ru = Tu * (D / 100) => Multiply balance by 1618, then divide by 1000000 (which is 100 * 10000, the latter for scaling 0.1618 to 1618)
+        // Using 1618 and 1000000 makes the calculation D = 0.1618%
+        uint256 calculatedReward = (voterTokenBalance * VOTER_REWARD_MULTIPLIER) / VOTER_REWARD_DIVISOR;
 
         if (calculatedReward > 0) {
             // Attempt to transfer the calculated reward to the voter
