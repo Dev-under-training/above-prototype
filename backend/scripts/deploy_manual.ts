@@ -81,15 +81,16 @@ async function main() {
     const aboveBallotAddress = await aboveBallot.getAddress();
     console.log(`ABOVEBallot deployed to: ${aboveBallotAddress}`);
 
-    // --- 7. Basic Interaction Testing ---
-    console.log("\n--- Testing VoterRegistry ---");
-    // Example interaction: Add deployer as a voter (using the deployed contract instance)
-    console.log(`Adding deployer (${deployerAddress}) as a voter...`);
+    // --- 7. Basic Interaction Testing (Updated for Testnet Self-Registration) ---
+    console.log("\n--- Testing VoterRegistry (Self-Registration) ---");
+    // Example interaction: Register the deployer as a voter using the new decentralized method
+    console.log(`Registering deployer (${deployerAddress}) as a voter...`);
     // Cast to any to avoid potential typing issues if TypeChain paths are problematic in VS Code
     const typedVoterRegistry: any = voterRegistry;
-    const addVoterTx = await typedVoterRegistry.connect(deployerWallet).addVoter(deployerAddress);
-    const addVoterReceipt = await addVoterTx.wait();
-    console.log(`Voter added in tx: ${addVoterReceipt?.hash}`);
+    // Call the new registerAsVoter function
+    const registerVoterTx = await typedVoterRegistry.connect(deployerWallet).registerAsVoter();
+    const registerVoterReceipt = await registerVoterTx.wait();
+    console.log(`Voter registered in tx: ${registerVoterReceipt?.hash}`);
 
     // Check if deployer is allowed
     const isDeployerAllowed = await typedVoterRegistry.isAllowed(deployerAddress);
@@ -98,7 +99,7 @@ async function main() {
     console.log("\n--- Deployment and Basic Interaction Complete ---");
     console.log(`VoterRegistry Address: ${voterRegistryAddress}`);
     console.log(`ABOVEBallot Address: ${aboveBallotAddress}`);
-    console.log("SUCCESS: Contracts deployed and basic interaction verified using standalone Ethers.js for Sepolia!");
+    console.log("SUCCESS: Contracts deployed and basic interaction (registration) verified using standalone Ethers.js for Sepolia!");
 }
 
 main()

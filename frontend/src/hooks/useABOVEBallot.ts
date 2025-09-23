@@ -1,6 +1,8 @@
 // frontend/src/hooks/useABOVEBallot.ts
 import { useReadContract, useWriteContract, useAccount } from 'wagmi';
-import { CONTRACT_ADDRESSES, ABOVE_BALLOT_ABI } from '../contracts/contractConfig';
+// Import formatUnits from viem
+import { formatUnits } from 'viem';
+import { CONTRACT_ADDRESSES, ABOVE_BALLOT_ABI, ABOVE_TOKEN_ABI } from '../contracts/contractConfig';
 // Import specific types from viem if needed for better typing, but avoid 'any'
 import type { Address } from 'viem'; // Safer import for Address type
 
@@ -208,6 +210,56 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
   const nextCampaignId = nextCampaignIdData as bigint | undefined;
   // --- END NEW ---
 
+  // --- NEW: 9. Fetch ABOVE Token Balance ---
+  const {
+    data: aboveTokenBalanceData,
+    isLoading: isFetchingAboveTokenBalance,
+    isError: isAboveTokenBalanceError,
+    error: aboveTokenBalanceError,
+  } = useReadContract({
+    address: CONTRACT_ADDRESSES.aboveToken, // Use the ABOVE token address
+    abi: ABOVE_TOKEN_ABI,                 // Use the ABOVE token ABI
+    functionName: 'balanceOf',
+    args: userAddress ? [userAddress] : undefined,
+    query: {
+      enabled: !!userAddress, // Only fetch if user is connected
+    },
+  });
+  const aboveTokenBalance = aboveTokenBalanceData as bigint | undefined;
+  // --- END NEW ---
+
+  // --- NEW: 10. Fetch ABOVE Token Allowance ---
+  const {
+    data: aboveTokenAllowanceData,
+    isLoading: isFetchingAboveTokenAllowance,
+    isError: isAboveTokenAllowanceError,
+    error: aboveTokenAllowanceError,
+  } = useReadContract({
+    address: CONTRACT_ADDRESSES.aboveToken, // Use the ABOVE token address
+    abi: ABOVE_TOKEN_ABI,                  // Use the ABOVE token ABI
+    functionName: 'allowance',
+    args: userAddress && CONTRACT_ADDRESSES.aboveBallot ? [userAddress, CONTRACT_ADDRESSES.aboveBallot] : undefined,
+    query: {
+      enabled: !!(userAddress && CONTRACT_ADDRESSES.aboveBallot), // Only fetch if user and ballot address are available
+    },
+  });
+  const aboveTokenAllowance = aboveTokenAllowanceData as bigint | undefined;
+  // --- END NEW ---
+
+  // --- NEW: 11. Fetch Campaign Creation Fee (Constant) ---
+  const {
+    data: campaignCreationFeeData,
+    isLoading: isFetchingCampaignCreationFee,
+    isError: isCampaignCreationFeeError,
+    error: campaignCreationFeeError,
+  } = useReadContract({
+    address: CONTRACT_ADDRESSES.aboveBallot,
+    abi: ABOVE_BALLOT_ABI,
+    functionName: 'CAMPAIGN_CREATION_FEE',
+  });
+  const CAMPAIGN_CREATION_FEE = campaignCreationFeeData as bigint | undefined;
+  // --- END NEW ---
+
 
   // --- Write Functions ---
 
@@ -254,6 +306,25 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
   // --- END Existing: Voting Functions ---
+
+  // --- NEW: Token Approval Function ---
+  const {
+    writeContract: approveAboveTokensWrite,
+    isPending: isApprovingAboveTokens,
+    isSuccess: isApproveAboveTokensSuccess,
+    isError: isApproveAboveTokensError,
+    error: approveAboveTokensError,
+  } = useWriteContract();
+
+  const handleApproveAboveTokens = (amount: bigint) => {
+    approveAboveTokensWrite({
+      address: CONTRACT_ADDRESSES.aboveToken, // Approve the ABOVE token contract
+      abi: ABOVE_TOKEN_ABI,                  // Use the ABOVE token ABI
+      functionName: 'approve',
+      args: [CONTRACT_ADDRESSES.aboveBallot, amount], // Approve ABOVEBallot to spend 'amount'
+    });
+  };
+  // --- END NEW: Token Approval Function ---
 
   // --- NEW: Campaign Management Functions ---
 
@@ -544,6 +615,23 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     nextCampaignIdError,
     // --- END NEW ---
 
+    // --- NEW: Token Data ---
+    aboveTokenBalance: aboveTokenBalance ?? 0n,
+    isFetchingAboveTokenBalance,
+    isAboveTokenBalanceError,
+    aboveTokenBalanceError,
+
+    aboveTokenAllowance: aboveTokenAllowance ?? 0n,
+    isFetchingAboveTokenAllowance,
+    isAboveTokenAllowanceError,
+    aboveTokenAllowanceError,
+
+    CAMPAIGN_CREATION_FEE: CAMPAIGN_CREATION_FEE ?? 0n,
+    isFetchingCampaignCreationFee,
+    isCampaignCreationFeeError,
+    campaignCreationFeeError,
+    // --- END NEW ---
+
     // --- Write functions and state ---
 
     // --- Voting ---
@@ -559,6 +647,14 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isVoteBallotError,
     voteBallotError,
     // --- END Voting ---
+
+    // --- NEW: Token Approval ---
+    handleApproveAboveTokens,
+    isApprovingAboveTokens,
+    isApproveAboveTokensSuccess,
+    isApproveAboveTokensError,
+    approveAboveTokensError,
+    // --- END NEW ---
 
     // --- Campaign Management Functions and States ---
     handleCreateCampaign,

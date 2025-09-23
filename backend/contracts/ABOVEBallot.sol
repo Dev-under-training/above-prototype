@@ -18,7 +18,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // Import IERC20 for AB
  *      Future versions will integrate advanced cryptography for anonymity.
  *      Introduces an 'endCampaign' function for formal conclusion and result recording.
  */
-contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functions like setting fees */ {
+contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
 
     // --- Token Integration ---
     IERC20 public immutable aboveToken; // Address of the deployed ABOVE token contract
@@ -193,14 +193,14 @@ contract ABOVEBallot /* is Ownable - Role changed, global owner for admin functi
      * @param _voterRegistryAddress The address of the deployed VoterRegistry contract.
      * @param _aboveTokenAddress The address of the deployed ABOVE token contract.
      */
-    constructor(address _voterRegistryAddress, address _aboveTokenAddress) /* Ownable(msg.sender) - Optional: Keep for global admin if needed */ {
+    // Explicitly call the Ownable constructor to set the owner (typically the deployer)
+    constructor(address _voterRegistryAddress, address _aboveTokenAddress) Ownable(msg.sender) {
         require(_voterRegistryAddress != address(0), "ABOVEBallot: Invalid VoterRegistry address");
         require(_aboveTokenAddress != address(0), "ABOVEBallot: Invalid ABOVE token address");
         voterRegistry = _voterRegistryAddress;
         aboveToken = IERC20(_aboveTokenAddress); // Initialize the token interface
         _nextCampaignId = 1; // Start IDs from 1
-        // Transfer ownership if using Ownable for global admin
-        // transferOwnership(msg.sender); // Uncomment if using Ownable for global admin functions
+        // Ownership is set by Ownable(msg.sender)
     }
     // --- End Constructor ---
 

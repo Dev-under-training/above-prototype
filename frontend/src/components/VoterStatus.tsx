@@ -3,9 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useVoterRegistry } from '../hooks/useVoterRegistry';
 import { useABOVEBallot } from '../hooks/useABOVEBallot';
-import { isAddress } from 'viem';
+import { isAddress, formatUnits } from 'viem'; // Import formatUnits for token display
 
-const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = null }) => {
+const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = null }) => {
   const { address: userAddress, isConnected } = useAccount();
   const {
     // Read data from VoterRegistry
@@ -17,18 +17,12 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
     isFetchingVoterCount,
     isVoterCountError,
     voterCountError,
-    // Single add Voter
-    handleAddVoter,
-    isAddingVoter,
-    isAddVoterSuccess,
-    isAddVoterError,
-    addVoterError,
-    // Batch add Voters
-    handleAddVoters,
-    isAddingVoters,
-    isAddVotersSuccess,
-    isAddVotersError,
-    addVotersError,
+    // Self-Registration
+    handleRegisterAsVoter,
+    isRegisteringAsVoter,
+    isRegisterAsVoterSuccess,
+    isRegisterAsVoterError,
+    registerAsVoterError,
   } = useVoterRegistry();
 
   // --- Destructure functions and state from useABOVEBallot ---
@@ -103,14 +97,29 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
     isFetchingNextCampaignId,
     isNextCampaignIdError,
     nextCampaignIdError,
+    // --- NEW: Token Data and Approval ---
+    aboveTokenBalance,
+    isFetchingAboveTokenBalance,
+    aboveTokenAllowance,
+    isFetchingAboveTokenAllowance,
+    CAMPAIGN_CREATION_FEE,
+    isFetchingCampaignCreationFee,
+    // Approve Tokens
+    handleApproveAboveTokens,
+    isApprovingAboveTokens,
+    isApproveAboveTokensSuccess,
+    isApproveAboveTokensError,
+    approveAboveTokensError,
+    // --- END NEW ---
   } = useABOVEBallot(campaignId);
   // --- END ---
 
   // --- State for Voter Management ---
-  const [voterToAdd, setVoterToAdd] = useState<string>('');
-  const [addVoterMessage, setAddVoterMessage] = useState<string>('');
-  const [votersToAddBatch, setVotersToAddBatch] = useState<string>('');
-  const [addVotersBatchMessage, setAddVotersBatchMessage] = useState<string>('');
+  // State for adding voters is removed as it's not used in the decentralized model
+  // const [voterToAdd, setVoterToAdd] = useState<string>('');
+  // const [addVoterMessage, setAddVoterMessage] = useState<string>('');
+  // const [votersToAddBatch, setVotersToAddBatch] = useState<string>('');
+  // const [addVotersBatchMessage, setAddVotersBatchMessage] = useState<string>('');
   // --- END State for Voter Management ---
 
   // --- State for Campaign Description ---
@@ -156,48 +165,9 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
   // --- END NEW ---
 
   // --- Handlers for Voter Management ---
-  const handleAddVoterSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddVoterMessage('');
-
-    if (!isAddress(voterToAdd)) {
-      setAddVoterMessage('Invalid Ethereum address.');
-      return;
-    }
-
-    handleAddVoter(voterToAdd as `0x${string}`);
-    setVoterToAdd('');
-  };
-
-  const handleAddVotersBatchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddVotersBatchMessage('');
-
-    const rawAddresses = votersToAddBatch.split(/[\n,]+/).map(addr => addr.trim()).filter(addr => addr !== '');
-    const validAddresses: `0x${string}`[] = [];
-    const invalidAddresses: string[] = [];
-
-    rawAddresses.forEach(addr => {
-        if (isAddress(addr)) {
-            validAddresses.push(addr as `0x${string}`);
-        } else {
-            invalidAddresses.push(addr);
-        }
-    });
-
-    if (invalidAddresses.length > 0) {
-      setAddVotersBatchMessage(`Invalid addresses found: ${invalidAddresses.join(', ')}`);
-      return;
-    }
-
-    if (validAddresses.length === 0) {
-      setAddVotersBatchMessage('No valid addresses found.');
-      return;
-    }
-
-    handleAddVoters(validAddresses);
-    setVotersToAddBatch('');
-  };
+  // Handlers for adding voters are removed as it's not used in the decentralized model
+  // const handleAddVoterSubmit = (e: React.FormEvent) => { ... }
+  // const handleAddVotersBatchSubmit = (e: React.FormEvent) => { ... }
   // --- END Handlers for Voter Management ---
 
   // --- Handler for Creating Campaign ---
@@ -478,14 +448,15 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
   if (!isConnected) {
     return (
       <div className="voter-status">
-        <p>Please connect your wallet to check voter status.</p>
+        <p>Please connect your wallet to access campaign controls.</p>
       </div>
     );
   }
 
   return (
     <div className="voter-status">
-      <h3>Voter Status</h3>
+      <h3>Campaign Controls</h3> {/* Updated header text */}
+      {/* Display basic voter status */}
       {isCheckingAllowed ? (
         <p>Checking if you are registered...</p>
       ) : isAllowedError ? (
@@ -503,38 +474,104 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
          <p><strong>Total Registered Voters:</strong> {(allowedVoterCount ?? 0n).toString()}</p>
       )}
 
-      {/* Owner Controls */}
+      {/* --- NEW: Self-Registration UI --- */}
+      {/* Show the registration button only if the user is connected but NOT already registered */}
+      {isConnected && !isAllowed && (
+        <div style={{ marginTop: '15px', padding: '10px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#f9f9f9' }}>
+          <p><strong>Not registered to vote yet?</strong></p>
+          <button
+            onClick={handleRegisterAsVoter} // Call the handler from the hook
+            disabled={isRegisteringAsVoter} // Disable while the transaction is pending
+            style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            {isRegisteringAsVoter ? 'Registering...' : 'Register to Vote (Testnet)'}
+          </button>
+          {/* Display status messages below the button */}
+          {isRegisterAsVoterSuccess && (
+            <p style={{ color: 'green', marginTop: '10px' }}>Registration successful! You can now create campaigns.</p>
+          )}
+          {isRegisterAsVoterError && (
+            <p style={{ color: 'red', marginTop: '10px' }}>Registration failed: {registerAsVoterError?.message}</p>
+          )}
+        </div>
+      )}
+      {/* --- END NEW: Self-Registration UI --- */}
+
+      {/* Campaign Controls - Updated Summary Text */}
       <details>
-        <summary>Owner Controls (Voter Management, Campaign Creation & Setup)</summary>
+        <summary>Campaign Controls (Create & Setup)</summary> {/* Updated summary text */}
 
         {/* --- Create Campaign Form --- */}
         <h4>Create New Campaign</h4>
-        <form onSubmit={handleCreateCampaignSubmit}>
-          <label htmlFor="createCampaignDescription">Description:</label>
-          <textarea
-            id="createCampaignDescription"
-            value={createCampaignDescription}
-            onChange={(e) => setCreateCampaignDescription(e.target.value)}
-            placeholder="Describe the new campaign..."
-            rows={3}
-            cols={50}
-            required
-          />
-          <br />
-          <label htmlFor="createCampaignType">Type:</label>
-          <select
-            id="createCampaignType"
-            value={createCampaignType}
-            onChange={(e) => setCreateCampaignType(e.target.value as 'Basic' | 'Ballot')}
-          >
-            <option value="Basic">Basic Voting</option>
-            <option value="Ballot">Ballot Voting</option>
-          </select>
-          <br />
-          <button type="submit" disabled={isCreatingCampaign}>
-            {isCreatingCampaign ? 'Creating...' : 'Create Campaign'}
-          </button>
-        </form>
+        {/* Display Token Balance and Allowance */}
+        {isFetchingAboveTokenBalance ? (
+          <p>Loading ABOVE token balance...</p>
+        ) : (
+          <p><strong>Your ABOVE Token Balance:</strong> {aboveTokenBalance !== undefined ? formatUnits(aboveTokenBalance, 18) : '0'} ABOVE</p>
+        )}
+
+        {isFetchingCampaignCreationFee ? (
+          <p>Loading campaign creation fee...</p>
+        ) : CAMPAIGN_CREATION_FEE !== undefined ? (
+          <p><strong>Required Fee:</strong> {formatUnits(CAMPAIGN_CREATION_FEE, 18)} ABOVE</p>
+        ) : null}
+
+        {/* Check if user has enough tokens and if allowance is sufficient */}
+        {isFetchingAboveTokenAllowance || isFetchingAboveTokenBalance || isFetchingCampaignCreationFee ? (
+          <p>Checking token status...</p>
+        ) : (
+          <>
+            {aboveTokenBalance !== undefined && CAMPAIGN_CREATION_FEE !== undefined && aboveTokenBalance < CAMPAIGN_CREATION_FEE ? (
+              <p style={{ color: 'red' }}>Insufficient ABOVE token balance to create a campaign.</p>
+            ) : (
+              <>
+                {aboveTokenAllowance !== undefined && CAMPAIGN_CREATION_FEE !== undefined && aboveTokenAllowance < CAMPAIGN_CREATION_FEE ? (
+                  <>
+                    <p style={{ color: 'orange' }}>Insufficient token allowance for campaign creation fee. Please approve the ABOVEBallot contract.</p>
+                    <button
+                      onClick={() => handleApproveAboveTokens(CAMPAIGN_CREATION_FEE)} // Approve for the exact fee
+                      disabled={isApprovingAboveTokens}
+                      style={{ marginBottom: '10px' }}
+                    >
+                      {isApprovingAboveTokens ? 'Approving...' : 'Approve ABOVE Tokens'}
+                    </button>
+                    {isApproveAboveTokensSuccess && <p style={{ color: 'green' }}>Tokens approved successfully! You can now create a campaign.</p>}
+                    {isApproveAboveTokensError && <p style={{ color: 'red' }}>Approval failed: {approveAboveTokensError?.message}</p>}
+                  </>
+                ) : (
+                  /* Show the actual Create Campaign Form/Button if allowance is sufficient */
+                  <form onSubmit={handleCreateCampaignSubmit}>
+                    <label htmlFor="createCampaignDescription">Description:</label>
+                    <textarea
+                      id="createCampaignDescription"
+                      value={createCampaignDescription}
+                      onChange={(e) => setCreateCampaignDescription(e.target.value)}
+                      placeholder="Describe the new campaign..."
+                      rows={3}
+                      cols={50}
+                      required
+                    />
+                    <br />
+                    <label htmlFor="createCampaignType">Type:</label>
+                    <select
+                      id="createCampaignType"
+                      value={createCampaignType}
+                      onChange={(e) => setCreateCampaignType(e.target.value as 'Basic' | 'Ballot')}
+                    >
+                      <option value="Basic">Basic Voting</option>
+                      <option value="Ballot">Ballot Voting</option>
+                    </select>
+                    <br />
+                    <button type="submit" disabled={isCreatingCampaign}>
+                      {isCreatingCampaign ? 'Creating...' : 'Create Campaign'}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
+          </>
+        )}
+
         {isCreateCampaignSuccess && <p style={{ color: 'green' }}>Campaign created successfully!</p>}
         {isCreateCampaignError && <p style={{ color: 'red' }}>Error creating campaign: {createCampaignError?.message}</p>}
         {createCampaignMessage && <p style={{ color: createCampaignMessage.includes('successfully') ? 'green' : 'red' }}>{createCampaignMessage}</p>}
@@ -573,47 +610,10 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
           </>
         )}
 
-        {/* --- Add Voters --- */}
-        <h4>Add Single Voter</h4>
-        <form onSubmit={handleAddVoterSubmit}>
-          <label htmlFor="voterAddress">Voter Address:</label>
-          <input
-            type="text"
-            id="voterAddress"
-            value={voterToAdd}
-            onChange={(e) => setVoterToAdd(e.target.value)}
-            placeholder="0x..."
-            required
-          />
-          <button type="submit" disabled={isAddingVoter}>
-            {isAddingVoter ? 'Adding...' : 'Add Voter'}
-          </button>
-        </form>
-        {isAddVoterSuccess && <p style={{ color: 'green' }}>Single voter added successfully!</p>}
-        {isAddVoterError && <p style={{ color: 'red' }}>Error adding single voter: {addVoterError?.message}</p>}
-        {addVoterMessage && <p style={{ color: 'red' }}>{addVoterMessage}</p>}
-
-        <h4 style={{ marginTop: '20px' }}>Add Multiple Voters (Batch)</h4>
-        <p>Enter one Ethereum address per line or separated by commas.</p>
-        <form onSubmit={handleAddVotersBatchSubmit}>
-          <label htmlFor="votersBatch">Voter Addresses:</label>
-          <textarea
-            id="votersBatch"
-            value={votersToAddBatch}
-            onChange={(e) => setVotersToAddBatch(e.target.value)}
-            placeholder="0xAddress1&#10;0xAddress2&#10;0xAddress3"
-            rows={5}
-            cols={50}
-            required
-          />
-          <button type="submit" disabled={isAddingVoters}>
-            {isAddingVoters ? 'Adding Voters...' : 'Add Voters (Batch)'}
-          </button>
-        </form>
-        {isAddVotersSuccess && <p style={{ color: 'green' }}>Batch of voters added successfully!</p>}
-        {isAddVotersError && <p style={{ color: 'red' }}>Error adding batch of voters: {addVotersError?.message}</p>}
-        {addVotersBatchMessage && <p style={{ color: 'red' }}>{addVotersBatchMessage}</p>}
-        {/* --- END Add Voters --- */}
+        {/* --- REMOVED: Add Voters Sections --- */}
+        {/* The sections for "Add Single Voter" and "Add Multiple Voters (Batch)" have been removed
+             as voter management is decentralized for the testnet. Any user holding ABOVE tokens can vote. */}
+        {/* --- END REMOVED --- */}
 
         {/* --- Set Campaign Description (if campaignId is provided) --- */}
         {campaignId !== null && (
@@ -758,7 +758,7 @@ const VoterStatus: React.FC<{ campaignId?: bigint | null }> = ({ campaignId = nu
                  {/* Display status messages for adding candidates for this position */}
                  {/* Note: Reusing addBallotPositionMessage for simplicity, consider a dedicated state */}
                  {/* The useEffect above handles success messages. Error messages could be added similarly. */}
-                 {/* {isAddCandidatesSuccess && ( ... ) } */} {/* Handled by the useEffect above */}
+                 {/* {isAddCandidatesSuccess && ( ... ) } */ /* Handled by the useEffect above */}
                  {/* {isAddCandidatesError && ( ... ) */}
               </div>
             )}

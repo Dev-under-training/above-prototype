@@ -1,11 +1,12 @@
-// src/hooks/useVoterRegistry.ts
+// frontend/src/hooks/useVoterRegistry.ts
 import { useReadContract, useWriteContract, useAccount } from 'wagmi';
 import { CONTRACT_ADDRESSES, VOTER_REGISTRY_ABI } from '../contracts/contractConfig';
-import { isAddress } from 'viem'; // Utility to validate Ethereum addresses
+import { isAddress } from 'viem'; // Utility to validate Ethereum addresses (kept if needed elsewhere, though not used in this specific hook now)
 
 /**
  * Custom hook for interacting with the VoterRegistry contract.
- * Provides functions to check voter status and add voters.
+ * Provides functions to check voter status and allows self-registration for the testnet.
+ * Note: Owner functions for adding voters (addVoter, addVoters) are removed for decentralization on testnet.
  */
 export const useVoterRegistry = () => {
   const { address: userAddress } = useAccount();
@@ -13,8 +14,7 @@ export const useVoterRegistry = () => {
   // --- Read Functions ---
 
   /**
-   * Checks if a specific address is allowed to vote.
-   * @param address The address to check. Defaults to the connected wallet address.
+   * Checks if the connected user's address is allowed to vote.
    * @returns An object containing:
    *   - data: boolean (true if allowed, false otherwise)
    *   - isLoading: boolean (true if the check is in progress)
@@ -57,67 +57,35 @@ export const useVoterRegistry = () => {
 
   // --- Write Functions ---
 
-  /**
-   * Prepares the write contract hook for adding a voter.
-   * This separates the preparation from the actual execution.
-   */
+  // --- REMOVED: Owner-Controlled Voter Addition ---
+  // The functions handleAddVoter and handleAddVoters, along with their state variables
+  // (isAddingVoter, isAddVoterSuccess, etc., isAddingVoters, isAddVotersSuccess, etc.)
+  // have been removed as they are not used in the decentralized testnet model.
+  // Voters must now self-register.
+  // --- END REMOVED ---
+
+  // --- NEW: Self-Registration Function for Testnet ---
   const {
-    writeContract: addVoter,
-    isPending: isAddingVoter,
-    isSuccess: isAddVoterSuccess,
-    isError: isAddVoterError,
-    error: addVoterError,
+    writeContract: registerAsVoterWrite,
+    isPending: isRegisteringAsVoter, // <-- New loading state
+    isSuccess: isRegisterAsVoterSuccess, // <-- New success state
+    isError: isRegisterAsVoterError, // <-- New error state
+    error: registerAsVoterError, // <-- New error object
   } = useWriteContract();
 
   /**
-   * Function to trigger the addVoter transaction.
-   * @param voterAddress The address of the voter to add.
+   * Function to trigger the registerAsVoter transaction.
+   * Allows any connected user to register themselves in the VoterRegistry.
    */
-  const handleAddVoter = (voterAddress: `0x${string}`) => {
-    if (!isAddress(voterAddress)) {
-       console.error("Invalid address provided to handleAddVoter:", voterAddress);
-       // Optionally, set an error state in your component
-       return;
-    }
-    addVoter({
+  const handleRegisterAsVoter = () => {
+    registerAsVoterWrite({
       address: CONTRACT_ADDRESSES.voterRegistry,
       abi: VOTER_REGISTRY_ABI,
-      functionName: 'addVoter',
-      args: [voterAddress],
+      functionName: 'registerAsVoter',
+      // No arguments required for registerAsVoter()
     });
   };
-
-   // --- NEW: Batch Add Voters Function ---
-  const {
-    writeContract: addVoters, // Renamed for clarity
-    isPending: isAddingVoters,
-    isSuccess: isAddVotersSuccess,
-    isError: isAddVotersError,
-    error: addVotersError,
-  } = useWriteContract();
-
-  /**
-   * Function to trigger the batch addVoters transaction.
-   * @param voterAddresses An array of Ethereum addresses to add.
-   */
-  const handleAddVoters = (voterAddresses: `0x${string}`[]) => {
-    // Basic client-side validation
-    const invalidAddresses = voterAddresses.filter(addr => !isAddress(addr));
-    if (invalidAddresses.length > 0) {
-      console.error("Invalid addresses found in batch:", invalidAddresses);
-      // Optionally, set an error state in your component
-      return;
-    }
-
-    addVoters({
-      address: CONTRACT_ADDRESSES.voterRegistry,
-      abi: VOTER_REGISTRY_ABI,
-      functionName: 'addVoters',
-      args: [voterAddresses], // Pass the array of addresses
-    });
-  };
-  // --- END NEW: Batch Add Voters Function ---
-
+  // --- END NEW: Self-Registration Function ---
 
   // --- Return Values ---
   return {
@@ -131,18 +99,25 @@ export const useVoterRegistry = () => {
     isVoterCountError,
     voterCountError,
 
-    // Write functions and state (Single Add)
-    handleAddVoter,
-    isAddingVoter,
-    isAddVoterSuccess,
-    isAddVoterError,
-    addVoterError,
+    // --- REMOVED: Owner Add Voter States/Functions ---
+    // handleAddVoter,
+    // isAddingVoter,
+    // isAddVoterSuccess,
+    // isAddVoterError,
+    // addVoterError,
+    // handleAddVoters,
+    // isAddingVoters,
+    // isAddVotersSuccess,
+    // isAddVotersError,
+    // addVotersError,
+    // --- END REMOVED ---
 
-    // Write functions and state (Batch Add)
-    handleAddVoters, // New function
-    isAddingVoters,   // New state
-    isAddVotersSuccess, // New state
-    isAddVotersError,   // New state
-    addVotersError,     // New error
+    // --- NEW: Self-Registration States/Functions ---
+    handleRegisterAsVoter, // <-- Export the handler
+    isRegisteringAsVoter,   // <-- Export the loading state
+    isRegisterAsVoterSuccess, // <-- Export the success state
+    isRegisterAsVoterError,   // <-- Export the error state
+    registerAsVoterError,     // <-- Export the error object
+    // --- END NEW ---
   };
 };

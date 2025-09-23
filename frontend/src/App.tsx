@@ -11,7 +11,7 @@ import VoterStatus from './components/VoterStatus';
 import CampaignDisplay from './components/CampaignDisplay';
 // Import VotingInterface component
 import VotingInterface from './components/VotingInterface';
-// Import the hook to get nextCampaignId and owner
+// Import the hook to get nextCampaignId
 import { useABOVEBallot } from './hooks/useABOVEBallot';
 // Import the logo image
 import aboveLogo from './assets/above-logo.png';
@@ -29,36 +29,13 @@ function App() {
     isFetchingNextCampaignId,
     isNextCampaignIdError,
     nextCampaignIdError,
-    // --- NEW: Fetch Owner ---
+    // --- Fetch Owner for potential future global admin (optional) ---
     contractOwner,
     isFetchingOwner,
     isOwnerError,
     ownerError
-    // --- END NEW ---
+    // --- END Owner Fetch ---
   } = useABOVEBallot(null); // Pass null for global data
-
-  // --- NEW: Determine User Role ---
-  const [isOwner, setIsOwner] = useState(false);
-  // Note: Voter registration status is typically checked per campaign or via VoterRegistry hook
-  // For now, we assume components handle their own eligibility checks
-  // const [isRegisteredVoter, setIsRegisteredVoter] = useState(false);
-
-  useEffect(() => {
-    if (userAddress && contractOwner && !isFetchingOwner) {
-      // Check if connected user is the owner (case-insensitive comparison)
-      setIsOwner(userAddress.toLowerCase() === contractOwner.toLowerCase());
-    } else {
-      setIsOwner(false);
-    }
-  }, [userAddress, contractOwner, isFetchingOwner]);
-
-  // Optional: Log errors for debugging
-  useEffect(() => {
-    if (isOwnerError) {
-      console.error("Error fetching contract owner:", ownerError);
-    }
-  }, [isOwnerError, ownerError]);
-  // --- END NEW ---
 
   // --- Logic to generate campaign ID options ---
   const [campaignIdOptions, setCampaignIdOptions] = useState<bigint[]>([]);
@@ -102,9 +79,9 @@ function App() {
         </div>
         <p className="sub-header">Auditable Ballots On a Verifiable Ecosystem</p>
       </header>
-      {/* --- END Header --- */}
+      {/* --- END Header --- */
 
-      {/* --- Wallet Connection --- */}
+      /* --- Wallet Connection --- */}
       <div className="wallet-connect-section">
         <AppKitButton />
       </div>
@@ -113,10 +90,7 @@ function App() {
       {/* Wallet Status Component - Always Visible if connected */}
       {isConnected && <WalletStatus />}
 
-      {/* --- Conditional Rendering based on Role --- */}
-
-      {/* --- Visible to Everyone (if connected) --- */}
-      {/* Campaign Selector - Visible to everyone connected */}
+      {/* --- Campaign Selector - Visible to everyone connected --- */}
       <div className="campaign-selector">
         <label htmlFor="campaignSelector">Select Campaign: </label>
         {isNextCampaignIdError ? (
@@ -141,31 +115,25 @@ function App() {
       </div>
       {/* --- END Campaign Selector --- */}
 
-      {/* --- Visible Only to Owner --- */}
-      {isConnected && isOwner && (
+      {/* --- Updated UI Logic: Visible to All Connected Users --- */}
+      {isConnected && (
         <>
-          {/* Voter Status Component (Owner Controls) */}
+          {/* Voter Status Component (Campaign Creation & Setup for Any User) */}
+          {/* The component internally handles showing relevant UI based on selected campaign creator */}
           <VoterStatus campaignId={selectedCampaignId} />
 
-          {/* Campaign Display Component - Always visible to owner for management */}
+          {/* Campaign Display Component - Always visible for information to connected users */}
           <CampaignDisplay campaignId={selectedCampaignId} />
         </>
       )}
 
-      {/* --- Visible to Voters (and potentially Owner, unless explicitly hidden) --- */}
-      {/* Show VotingInterface if connected, not the owner, and a campaign is selected */}
+      {/* --- Voting Interface - Visible to Connected Users for Selected Campaign --- */}
+      {/* Show VotingInterface if connected and a campaign is selected */}
       {/* VotingInterface.tsx should handle its own checks for eligibility and campaign state */}
-      {isConnected && !isOwner && selectedCampaignId && (
+      {isConnected && selectedCampaignId && (
         <VotingInterface campaignId={selectedCampaignId} />
       )}
-
-      {/* Optional: Show CampaignDisplay to voters as well (read-only view) */}
-      {/* Uncomment the lines below if you want voters to see the campaign details/results */}
-            {isConnected && !isOwner && selectedCampaignId && (
-        <CampaignDisplay campaignId={selectedCampaignId} />
-      )}
-
-      {/* --- END Conditional Rendering --- */}
+      {/* --- END Voting Interface --- */}
 
     </div>
   );
