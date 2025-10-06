@@ -1,10 +1,10 @@
 // frontend/src/hooks/useABOVEBallot.ts
-import { useEffect } from 'react';
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { useReadContract, useWriteContract, useAccount } from 'wagmi';
 import { useQueryClient } from '@tanstack/react-query';
 import { CONTRACT_ADDRESSES, ABOVE_BALLOT_ABI, ABOVE_TOKEN_ABI } from '../contracts/contractConfig';
 import type { Address } from 'viem';
 
+// --- Define TypeScript types for complex contract structures ---
 type Position = {
   name: string;
   maxSelections: number;
@@ -29,6 +29,11 @@ type Campaign = {
   [key: string]: any;
 };
 
+/**
+ * Custom hook for interacting with the ABOVEBallot contract.
+ * Provides functions to get campaign info, check vote status, cast votes, and manage campaigns.
+ * This version is updated for the simplified flow where finalization enables voting.
+ */
 export const useABOVEBallot = (campaignId: bigint | null) => {
   const { address: userAddress } = useAccount();
   const queryClient = useQueryClient();
@@ -214,19 +219,6 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
   });
   const CAMPAIGN_CREATION_FEE = campaignCreationFeeData as bigint | undefined;
 
-const {
-  data: activeCampaignIdData,
-  isLoading: isFetchingActiveCampaignId,
-  isError: isActiveCampaignIdError,
-  error: activeCampaignIdError,
-} = useReadContract({
-  address: CONTRACT_ADDRESSES.aboveBallot,
-  abi: ABOVE_BALLOT_ABI,
-  functionName: 'getActiveCampaignId',
-});
-
-const activeCampaignId = activeCampaignIdData as bigint | undefined;
-
   // --- Write Functions ---
 
   const {
@@ -323,76 +315,6 @@ const activeCampaignId = activeCampaignIdData as bigint | undefined;
       abi: ABOVE_BALLOT_ABI,
       functionName: 'setCampaignDescription',
       args: [campaignId, description],
-    });
-  };
-
-  // --- CORRECTED: activateCampaign WITH useWaitForTransactionReceipt ---
-  const {
-    writeContract: activateCampaignWrite,
-    isPending: isActivatingCampaign,
-    isSuccess: isActivateCampaignTxSent, // Renamed for clarity: Tx sent to network
-    isError: isActivateCampaignError,
-    error: activateCampaignError,
-    data: activateCampaignTxHash, // Get the transaction hash
-  } = useWriteContract();
-
-  const handleActivateCampaign = () => {
-    if (campaignId === null) {
-      console.error("Cannot activate: campaignId is null");
-      return;
-    }
-    activateCampaignWrite({
-      address: CONTRACT_ADDRESSES.aboveBallot,
-      abi: ABOVE_BALLOT_ABI,
-      functionName: 'activateCampaign',
-      args: [campaignId],
-    });
-  };
-
-  // Use waitForTransactionReceipt to wait for confirmation
-  const { isSuccess: isActivateCampaignTxConfirmed } = useWaitForTransactionReceipt({
-    hash: activateCampaignTxHash,
-  });
-
-  // Invalidate queries ONLY when the transaction is confirmed on-chain
-  useEffect(() => {
-  if (isActivateCampaignTxConfirmed && campaignId !== null) {
-    console.log(`Campaign ${campaignId.toString()} activation confirmed. Refreshing data.`);
-    queryClient.invalidateQueries({ 
-      queryKey: ['readContract', { 
-        address: CONTRACT_ADDRESSES.aboveBallot, 
-        functionName: 'getCampaign', 
-        args: [campaignId] 
-      }] 
-    });
-    queryClient.invalidateQueries({ 
-      queryKey: ['readContract', { 
-        address: CONTRACT_ADDRESSES.aboveBallot, 
-        functionName: 'getActiveCampaignId' 
-      }] 
-    });
-  }
-}, [isActivateCampaignTxConfirmed, campaignId, queryClient]);
-  // --- END CORRECTED SECTION ---
-
-  const {
-    writeContract: deactivateCampaignWrite,
-    isPending: isDeactivatingCampaign,
-    isSuccess: isDeactivateCampaignSuccess,
-    isError: isDeactivateCampaignError,
-    error: deactivateCampaignError,
-  } = useWriteContract();
-
-  const handleDeactivateCampaign = () => {
-    if (campaignId === null) {
-      console.error("Cannot deactivate: campaignId is null");
-      return;
-    }
-    deactivateCampaignWrite({
-      address: CONTRACT_ADDRESSES.aboveBallot,
-      abi: ABOVE_BALLOT_ABI,
-      functionName: 'deactivateCampaign',
-      args: [campaignId],
     });
   };
 
@@ -616,19 +538,6 @@ const activeCampaignId = activeCampaignIdData as bigint | undefined;
     isSetDescriptionError,
     setDescriptionError,
 
-    handleActivateCampaign,
-    isActivatingCampaign,
-    isActivateCampaignTxSent, // Expose if needed for UI
-    isActivateCampaignError,
-    activateCampaignError,
-    isActivateCampaignTxConfirmed,
-
-    handleDeactivateCampaign,
-    isDeactivatingCampaign,
-    isDeactivateCampaignSuccess,
-    isDeactivateCampaignError,
-    deactivateCampaignError,
-
     handleSetBasicCampaign,
     isSettingBasicCampaign,
     isSetBasicCampaignSuccess,
@@ -664,11 +573,5 @@ const activeCampaignId = activeCampaignIdData as bigint | undefined;
     isEndCampaignSuccess,
     isEndCampaignError,
     endCampaignError,
-    
-    activeCampaignId,
-    isFetchingActiveCampaignId,
-    isActiveCampaignIdError,
-    activeCampaignIdError,
-    
   };
 };

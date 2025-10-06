@@ -36,14 +36,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
     isFetchingBallotResults,
     isBallotResultsError,
     ballotResultsError,
-    // --- NEW: Import activeCampaignId ---
-    activeCampaignId,
-    // --- END NEW ---
   } = useABOVEBallot(campaignId);
-
-  // --- NEW: Compute if the selected campaign is active ---
-  const isCampaignActive = campaignId !== null && activeCampaignId === campaignId;
-  // --- END NEW ---
 
   const [selectedBasicChoices, setSelectedBasicChoices] = useState<number[]>([]);
   const [selectedGlobalCandidateIds, setSelectedGlobalCandidateIds] = useState<Set<number>>(new Set());
@@ -58,7 +51,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
   }, [isVoteBasicSuccess, isVoteBallotSuccess]);
 
   const handleBasicChoiceToggle = (index: number) => {
-    if (!campaignId || !campaign || !isCampaignActive || hasVoted || isVotingBasic) return;
+    if (!campaignId || !campaign || !campaign.isFinalized || hasVoted || isVotingBasic) return;
 
     if (isBasicSingleVote) {
       setSelectedBasicChoices([index]);
@@ -74,7 +67,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
   };
 
   const handleBallotCandidateToggle = (globalCandidateId: number) => {
-    if (!campaignId || !campaign || !isCampaignActive || !campaign.isFinalized || hasVoted || isVotingBallot) return;
+    if (!campaignId || !campaign || !campaign.isFinalized || hasVoted || isVotingBallot) return;
 
     setSelectedGlobalCandidateIds(prevSelectedIds => {
       const newSelectedIds = new Set(prevSelectedIds);
@@ -100,9 +93,8 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
        setGeneralMessage('Campaign data unavailable.');
        return;
     }
-    // --- Use isCampaignActive instead of campaign.isActive ---
-    if (!isCampaignActive) {
-       setGeneralMessage('This campaign is not active for voting.');
+    if (!campaign.isFinalized) {
+       setGeneralMessage('This campaign is not yet finalized for voting.');
        return;
     }
     if (hasVoted) {
@@ -131,14 +123,9 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
        setGeneralMessage('Campaign data unavailable.');
        return;
     }
-    // --- Use isCampaignActive instead of campaign.isActive ---
-    if (!isCampaignActive) {
-       setGeneralMessage('This campaign is not active for voting.');
-       return;
-    }
     if (!campaign.isFinalized) {
-        setGeneralMessage('This ballot campaign is not yet finalized.');
-        return;
+       setGeneralMessage('This campaign is not yet finalized for voting.');
+       return;
     }
     if (hasVoted) {
       setGeneralMessage('You have already voted in this campaign.');
@@ -159,7 +146,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
     return (
       <div className="voting-interface">
         <h3>Voting</h3>
-        <p>Please select an active campaign to vote.</p>
+        <p>Please select a campaign to vote.</p>
       </div>
     );
   }
@@ -202,12 +189,12 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
     );
   }
 
-  // --- Use isCampaignActive instead of campaign.isActive ---
-  if (!isCampaignActive) {
+  // Check if the campaign is finalized for voting
+  if (!campaign.isFinalized) {
      return (
       <div className="voting-interface">
         <h3>Voting (Campaign ID: {campaignId.toString()})</h3>
-        <p>This campaign is not currently active for voting.</p>
+        <p>This campaign is not yet finalized for voting.</p>
       </div>
     );
   }
@@ -247,7 +234,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
                       name="basic-vote"
                       checked={isSelected}
                       onChange={() => handleBasicChoiceToggle(index)}
-                      disabled={hasVoted || isVotingBasic || !isCampaignActive} // <-- Use isCampaignActive
+                      disabled={hasVoted || isVotingBasic || !campaign.isFinalized}
                     />
                     {choice}
                   </label>
@@ -255,7 +242,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
               );
             })}
           </fieldset>
-          <button type="submit" disabled={hasVoted || isVotingBasic || selectedBasicChoices.length === 0 || !isCampaignActive}>
+          <button type="submit" disabled={hasVoted || isVotingBasic || selectedBasicChoices.length === 0 || !campaign.isFinalized}>
             {isVotingBasic ? 'Submitting Vote...' : 'Submit Vote'}
           </button>
         </form>
@@ -331,7 +318,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
                             disabled={
                               hasVoted ||
                               isVotingBallot ||
-                              !isCampaignActive || // <-- Use isCampaignActive
+                              !campaign.isFinalized ||
                               !campaign.isFinalized ||
                               (!isCandidateSelected && isAtMaxSelections)
                             }
@@ -347,7 +334,7 @@ const VotingInterface: React.FC<VotingInterfaceProps> = ({ campaignId }) => {
               </fieldset>
             );
           })}
-          <button type="submit" disabled={hasVoted || isVotingBallot || !isCampaignActive || !campaign.isFinalized || selectedGlobalCandidateIds.size === 0}>
+          <button type="submit" disabled={hasVoted || isVotingBallot || !campaign.isFinalized || !campaign.isFinalized || selectedGlobalCandidateIds.size === 0}>
             {isVotingBallot ? 'Submitting Vote...' : 'Submit Vote'}
           </button>
         </form>

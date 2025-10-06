@@ -38,16 +38,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     isCreateCampaignSuccess,
     isCreateCampaignError,
     createCampaignError,
-    handleActivateCampaign,
-    isActivatingCampaign,
-    isActivateCampaignTxConfirmed, // Use the confirmed state
-    handleDeactivateCampaign,
-    isDeactivatingCampaign,
-    isDeactivateCampaignSuccess,
-    isDeactivateCampaignError,
-    isActivateCampaignError,
-    deactivateCampaignError,
-    activateCampaignError,
     handleSetBasicCampaign,
     isSettingBasicCampaign,
     isSetBasicCampaignSuccess,
@@ -89,19 +79,11 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     isApproveAboveTokensSuccess,
     isApproveAboveTokensError,
     approveAboveTokensError,
-    // --- NEW: Import activeCampaignId ---
-    activeCampaignId,
-    // --- END NEW ---
   } = useABOVEBallot(campaignId);
 
-  // --- NEW: Check if Connected User is Campaign Creator ---
+  // --- Check if Connected User is Campaign Creator ---
   const isCampaignCreator = isConnected && campaign && userAddress && 
                            campaign.creator.toLowerCase() === userAddress.toLowerCase();
-  // --- END NEW ---
-
-  // --- NEW: Compute if the selected campaign is active ---
-  const isCampaignActive = campaignId !== null && activeCampaignId === campaignId;
-  // --- END NEW ---
 
   // --- State for Campaign Description ---
   const [descriptionInput, setDescriptionInput] = useState<string>('');
@@ -121,17 +103,13 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
   // --- END State for Basic Campaign Setup ---
 
   // --- State for Ballot Campaign Setup (Strict Sequential Flow) ---
-  // For adding positions
   const [ballotPositionNameInput, setBallotPositionNameInput] = useState<string>('');
   const [ballotPositionMaxSelectionsInput, setBallotPositionMaxSelectionsInput] = useState<number>(1);
   const [addBallotPositionMessage, setAddBallotPositionMessage] = useState<string>('');
 
   // --- Strict Sequential State Management ---
-  // Track the index of the position that was *successfully* added last
   const [lastAddedPositionIndex, setLastAddedPositionIndex] = useState<number | null>(null);
-  // Temporarily store the index we are *trying* to add, to use in useEffect
   const [pendingPositionIndex, setPendingPositionIndex] = useState<number | null>(null);
-  // Track candidate names input for the currently active position input section
   const [candidateNamesForLastPosition, setCandidateNamesForLastPosition] = useState<string>('');
   // --- END State for Ballot Campaign Setup ---
 
@@ -139,7 +117,7 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
   const [finalizeBallotMessage, setFinalizeBallotMessage] = useState<string>('');
   // --- END State for Finalizing Ballot Campaign ---
 
-  // --- NEW: State for End Campaign Confirmation ---
+  // --- State for End Campaign Confirmation ---
   const [showEndConfirmation, setShowEndConfirmation] = useState<boolean>(false);
   const [endCampaignMessage, setEndCampaignMessage] = useState<string>('');
   // --- END NEW ---
@@ -328,17 +306,7 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
       }
   }, [isCreateCampaignSuccess]);
 
-  useEffect(() => {
-    if (isActivateCampaignTxConfirmed) {
-         setCreateCampaignMessage('Campaign activated successfully!');
-    }
-  }, [isActivateCampaignTxConfirmed]);
-
-  useEffect(() => {
-    if (isDeactivateCampaignSuccess) {
-         setCreateCampaignMessage('Campaign deactivated successfully!');
-    }
-  }, [isDeactivateCampaignSuccess]);
+  // --- Removed activation/deactivation useEffects ---
 
   useEffect(() => {
     if (isEndCampaignSuccess) {
@@ -479,42 +447,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
         {createCampaignMessage && <p style={{ color: createCampaignMessage.includes('successfully') ? 'green' : 'red' }}>{createCampaignMessage}</p>}
 
         <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
-
-        {campaignId !== null && isCampaignCreator && (
-          <>
-            <h4>Activate/Deactivate Campaign (ID: {campaignId.toString()})</h4>
-            {isFetchingCampaign ? (
-              <p>Loading campaign status...</p>
-            ) : isCampaignError ? (
-              <p style={{ color: 'red' }}>Error loading campaign status: {campaignError?.message}</p>
-            ) : campaign ? (
-              <>
-                {/* --- Use isCampaignActive instead of campaign.isActive --- */}
-                <p><strong>Status:</strong> {isCampaignActive ? 'Active' : (campaign.isFinalized ? 'Finalized' : 'Inactive')}</p>
-                <button 
-                  onClick={() => handleActivateCampaign()} 
-                  disabled={isActivatingCampaign || isCampaignActive} // <-- Now uses isCampaignActive
-                >
-                  {isActivatingCampaign ? 'Activating...' : 'Activate Campaign'}
-                </button>
-                <button 
-                  onClick={() => handleDeactivateCampaign()} 
-                  disabled={isDeactivatingCampaign || !isCampaignActive} // <-- Now uses isCampaignActive
-                  style={{ marginLeft: '10px' }}
-                >
-                  {isDeactivatingCampaign ? 'Deactivating...' : 'Deactivate Campaign'}
-                </button>
-                {isActivateCampaignTxConfirmed && <p style={{ color: 'green' }}>Campaign activated successfully!</p>}
-                {isActivateCampaignError && <p style={{ color: 'red' }}>Error activating campaign: {activateCampaignError?.message}</p>}
-                {isDeactivateCampaignSuccess && <p style={{ color: 'green' }}>Campaign deactivated successfully!</p>}
-                {isDeactivateCampaignError && <p style={{ color: 'red' }}>Error deactivating campaign: {deactivateCampaignError?.message}</p>}
-              </>
-            ) : (
-              <p>Campaign data not found.</p>
-            )}
-            <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
-          </>
-        )}
 
         {campaignId !== null && isCampaignCreator && (
           <>

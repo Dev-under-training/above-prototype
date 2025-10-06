@@ -5,8 +5,8 @@
 
 // --- Contract Addresses (from your Hardhat deployment) ---
 export const CONTRACT_ADDRESSES = {
-  voterRegistry: '0xc28079420ea5363C5759C82dF9cd4414D444a08E',
-  aboveBallot: '0x3E9378E05fb5D3085d555B79f9d81385b1d38F11',
+  voterRegistry: '0x65110662114338fbE2218c7B607ECD16829F09A8',
+  aboveBallot: '0x7841aE4eF99d30c4509B6DdB193e5E1A97Bd3d5e',
   aboveToken: '0x3045a4d2068a94de48b4f143561fbf47a03d12f8',
 } as const; // 'as const' makes the addresses readonly
 
