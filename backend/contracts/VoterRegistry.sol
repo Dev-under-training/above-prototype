@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol"; // Importing Ownable, but functions restricted
+// No need for Ownable if owner functions are removed for testnet decentralization
+// import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title VoterRegistry
- * @dev Manages a list of eligible voter addresses.
+ * @dev Manages a list of eligible voter addresses for actions requiring registration (e.g., campaign creation).
  *      Testnet MVP: Only self-registration via `registerAsVoter` is allowed.
- *      Owner retains contract ownership for potential future admin functions (e.g., upgrading logic if needed).
- *      Future versions will integrate DIDs/VCs/ZKPs for Sybil resistance and privacy.
+ *      Future versions might integrate DIDs/VCs/ZKPs for Sybil resistance and privacy.
  */
-contract VoterRegistry /* is Ownable - Removing direct owner control over voter addition for testnet */ {
+contract VoterRegistry /* is Ownable - Removed for testnet decentralization */ {
 
     // --- Data Structures ---
     // Mapping to store allowed voter addresses
@@ -21,20 +21,18 @@ contract VoterRegistry /* is Ownable - Removing direct owner control over voter 
     // --- Events ---
     // Event emitted when a voter registers themselves (primary testnet mechanism)
     event VoterRegistered(address indexed voter);
-    // Optional: Event if owner needs to add (e.g., for initial setup or emergencies, but functions disabled)
-    // event VoterAdded(address indexed voter); // Kept commented if needed for ABI compatibility, but functions removed.
     // --- End Events ---
 
     /**
      * @dev Constructor.
-     * Note: Owner is set by Ownable, but owner functions for adding voters are removed/disabled.
+     * Note: Ownership is not used for voter addition in this testnet version.
      */
-    constructor() /* Ownable(msg.sender) - Ownership exists but not used for voter addition here */ { }
+    constructor() /* Ownable(msg.sender) - Ownership not needed for voter addition here */ { }
 
     // --- REMOVED: Owner-Controlled Voter Addition ---
+    // These functions were removed to enforce decentralization for the testnet.
+    // Voter addition is now only possible through self-registration.
     /*
-    // These functions are REMOVED or made non-functional for the decentralized testnet.
-    // The owner can no longer directly add voters.
     function addVoter(address _voter) external onlyOwner { ... }
     function addVoters(address[] calldata _voters) external onlyOwner { ... }
     */
@@ -43,7 +41,7 @@ contract VoterRegistry /* is Ownable - Removing direct owner control over voter 
     // --- NEW: Self-Registration for Testnet (Primary Mechanism) ---
     /**
      * @dev Allows any user to register themselves as a voter.
-     *      This is the core mechanism for testnet decentralization.
+     *      This is the core mechanism for testnet decentralization (e.g., for campaign creation).
      *      Future versions might add requirements (e.g., payment, VC verification).
      */
     function registerAsVoter() external {
@@ -61,6 +59,7 @@ contract VoterRegistry /* is Ownable - Removing direct owner control over voter 
 
     /**
      * @dev Checks if an address is on the allowed voter list.
+     *      Used by ABOVEBallot.sol to determine eligibility for campaign creation.
      * @param _voter The address to check.
      * @return bool True if the address is allowed, false otherwise.
      */

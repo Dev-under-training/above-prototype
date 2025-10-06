@@ -4,21 +4,30 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // Import IERC20 for ABOVE token interaction
 
+// --- NEW: Define Interface for VoterRegistry ---
+interface IVoterRegistry {
+    function isAllowed(address _voter) external view returns (bool);
+    // Add other functions from VoterRegistry if used elsewhere in this contract
+    function allowedVoterCount() external view returns (uint256);
+}
+// --- END NEW ---
+
 /**
  * @title ABOVEBallot
  * @dev A flexible smart contract for managing multiple voting campaigns.
  *      Supports Basic Voting (single/multiple choice) and Ballot Type Voting (structured positions/candidates).
- *      Integrates with VoterRegistry for eligibility checks.
+ *      Integrates with VoterRegistry for eligibility checks (e.g., for campaign creation).
  *      Campaigns are identified by unique IDs for immutability and historical access.
  *      Integrates with the native ABOVE token for campaign creation fees and voter rewards.
- *      Campaign creation is decentralized (anyone can create, paying a fee).
+ *      Campaign creation is decentralized (anyone can create, paying a fee and being registered).
  *      Campaign configuration is restricted to the creator.
- *      Voter eligibility is simplified for testnet (must hold ABOVE tokens).
+ *      Voter eligibility for voting is simplified for testnet (must hold ABOVE tokens).
  *      This version focuses on core multi-campaign logic with tokenomics and decentralization.
  *      Future versions will integrate advanced cryptography for anonymity.
  *      Introduces an 'endCampaign' function for formal conclusion and result recording.
+ *      Fixes the activateCampaign bug to prevent one creator from deactivating another's campaign.
  */
-contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
+contract ABOVEBallot is Ownable {
 
     // --- Token Integration ---
     IERC20 public immutable aboveToken; // Address of the deployed ABOVE token contract
@@ -34,24 +43,32 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
 
     // --- Data Structures ---
     // Address of the deployed VoterRegistry contract (kept for potential future use or admin functions)
-    address public voterRegistry;
+    // --- MODIFIED: Use the Interface Type ---
+    IVoterRegistry public voterRegistry;
+    // --- END MODIFIED ---
 
     // --- Campaign Management ---
     uint256 private _nextCampaignId; // Counter for generating unique IDs
 
+    // --- NEW: Global Active Campaign ID ---
+    uint256 public activeCampaignId = 0; // 0 means no active campaign globally
+    // --- END NEW ---
+
     enum CampaignType { Undefined, Basic, Ballot }
 
+    // --- MODIFIED: Campaign Struct (isActive removed) ---
     struct Campaign {
         uint256 id;
         CampaignType campaignType;
         string description;
-        bool isActive; // Is this the "active" campaign for voting?
+        // bool isActive; // Removed from struct, managed globally by activeCampaignId
         bool isFinalized; // Is setup complete and voting closed?
         uint256 createdAt;
         uint256 finalizedAt; // Optional: timestamp when finalized
         address creator; // <-- NEW: Record the creator of the campaign
         // Future: Add start/end times for voting periods?
     }
+    // --- END MODIFIED ---
 
     // Store campaign metadata by ID
     mapping(uint256 => Campaign) public campaigns;
@@ -151,10 +168,12 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
         _;
     }
 
+    // --- MODIFIED: onlyActiveCampaign checks global state ---
     modifier onlyActiveCampaign(uint256 campaignId) {
-        require(campaigns[campaignId].isActive, "ABOVEBallot: Campaign is not active.");
+        require(activeCampaignId == campaignId, "ABOVEBallot: Campaign is not active.");
         _;
     }
+    // --- END MODIFIED ---
 
     modifier onlyUnfinalizedCampaign(uint256 campaignId) {
         require(!campaigns[campaignId].isFinalized, "ABOVEBallot: Campaign is already finalized.");
@@ -197,7 +216,9 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
     constructor(address _voterRegistryAddress, address _aboveTokenAddress) Ownable(msg.sender) {
         require(_voterRegistryAddress != address(0), "ABOVEBallot: Invalid VoterRegistry address");
         require(_aboveTokenAddress != address(0), "ABOVEBallot: Invalid ABOVE token address");
-        voterRegistry = _voterRegistryAddress;
+        // --- MODIFIED: Assign to the Interface Type Variable ---
+        voterRegistry = IVoterRegistry(_voterRegistryAddress); // Cast address to interface
+        // --- END MODIFIED ---
         aboveToken = IERC20(_aboveTokenAddress); // Initialize the token interface
         _nextCampaignId = 1; // Start IDs from 1
         // Ownership is set by Ownable(msg.sender)
@@ -209,12 +230,18 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
     /**
      * @dev Creates a new campaign entry. Anyone can call this, provided they pay the fee.
      *      Requires payment of CAMPAIGN_CREATION_FEE in ABOVE tokens.
+     *      Requires the user to be registered in VoterRegistry.
      * @param _description A description for the campaign.
      * @param _type The type of campaign (Basic or Ballot).
      * @return campaignId The unique ID of the newly created campaign.
      */
     function createCampaign(string memory _description, CampaignType _type) external /* onlyOwner REMOVED */ returns (uint256 campaignId) {
         require(_type != CampaignType.Undefined, "ABOVEBallot: Campaign type cannot be Undefined.");
+
+        // --- NEW: Check Voter Registry Eligibility for Creation (Testnet) ---
+        // This line should now work because voterRegistry is of type IVoterRegistry
+        require(voterRegistry.isAllowed(msg.sender), "ABOVEBallot: You must be registered to create a campaign (Testnet).");
+        // --- END NEW ---
 
         // --- Token Fee Collection ---
         // Require the creator to have pre-approved the ABOVEBallot contract to spend the fee
@@ -231,7 +258,7 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
             id: campaignId,
             campaignType: _type,
             description: _description,
-            isActive: false, // Created campaigns start inactive
+            // isActive is managed globally now
             isFinalized: false,
             createdAt: block.timestamp,
             finalizedAt: 0,
@@ -262,23 +289,25 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
     /**
      * @dev Activates a campaign for voting.
      *      Only the campaign creator can call this.
-     *      Deactivates any currently active campaign.
-     *      NOTE: Activation is now allowed for finalized campaigns (e.g., to reactivate results).
+     *      Deactivates the currently active campaign (if any and different).
      * @param campaignId The ID of the campaign to activate.
      */
     function activateCampaign(uint256 campaignId) external
         onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
-        /* onlyUnfinalizedCampaign removed */
+        /* onlyUnfinalizedCampaign removed - allows re-activation for viewing results */
     {
-        // Deactivate the currently active campaign, if any
-        for (uint256 i = 1; i < _nextCampaignId; i++) {
-            if (campaigns[i].isActive) {
-                campaigns[i].isActive = false;
-                emit CampaignDeactivated(i);
-            }
+        // --- CRITICAL FIX: Only deactivate the currently active campaign (if different) ---
+        if (activeCampaignId != 0 && activeCampaignId != campaignId) {
+            // Deactivate the previously active campaign
+            // campaigns[activeCampaignId].isActive = false; // <-- REMOVED: No longer managed here
+            emit CampaignDeactivated(activeCampaignId);
         }
-        campaigns[campaignId].isActive = true;
+
+        // Activate the requested campaign
+        // campaigns[campaignId].isActive = true; // <-- REMOVED: No longer managed here
+        activeCampaignId = campaignId; // Update the global state
+
         emit CampaignActivated(campaignId);
     }
 
@@ -291,56 +320,14 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
         onlyCampaignCreator(campaignId) // <-- USE NEW MODIFIER
         onlyValidCampaign(campaignId)
      {
-        // Check if it's the active campaign
-        if (campaigns[campaignId].isActive) {
-            campaigns[campaignId].isActive = false;
+        // Check if the selected campaign is the currently active one
+        if (activeCampaignId == campaignId) {
+            // campaigns[campaignId].isActive = false; // <-- REMOVED: No longer managed here
+            activeCampaignId = 0; // Clear the global state
             emit CampaignDeactivated(campaignId);
         }
-        // If it's not active, this call effectively does nothing but is allowed.
+        // If it's not the active one, the call effectively does nothing but is allowed.
      }
-
-    // --- REMOVED: resetCampaign function ---
-    /*
-    function resetCampaign(uint256 campaignId) external
-        onlyOwner // Or onlyCampaignCreator if that was the intended restriction
-        onlyValidCampaign(campaignId)
-        onlyFinalizedCampaign(campaignId)
-    {
-        // --- Clear Basic Campaign Data (if applicable) ---
-        if (campaigns[campaignId].campaignType == CampaignType.Basic) {
-            delete basicChoicesByCampaign[campaignId];
-            uint256 choiceCount = _basicChoiceCounts[campaignId];
-            for (uint256 i = 0; i < choiceCount; i++) {
-                 delete basicChoiceVotesByCampaign[campaignId][i];
-            }
-            delete isBasicSingleVoteByCampaign[campaignId];
-            delete _basicChoiceCounts[campaignId];
-        }
-
-        // --- Clear Ballot Campaign Data (if applicable) ---
-        if (campaigns[campaignId].campaignType == CampaignType.Ballot) {
-            delete positionsByCampaign[campaignId];
-            delete candidatesByCampaign[campaignId];
-            uint256 candidateCount = _ballotCandidateCounts[campaignId];
-            for (uint256 i = 0; i < candidateCount; i++) {
-                 delete candidateVotesByCampaign[campaignId][i];
-            }
-            delete _ballotCandidateCounts[campaignId];
-        }
-
-        // --- Clear General Voting Tracking for this Campaign ---
-        delete totalVotesPerCampaign[campaignId];
-
-        // --- Reset Campaign Metadata Flags ---
-        Campaign storage campaign = campaigns[campaignId];
-        campaign.isActive = false;
-        campaign.isFinalized = false;
-        campaign.finalizedAt = 0;
-
-        emit CampaignReset(campaignId);
-    }
-    */
-    // --- END REMOVED ---
 
     // --- NEW FUNCTION: End Campaign ---
     /**
@@ -390,8 +377,8 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
         }
 
         // --- Mark Campaign as Ended (Deactivate if active) ---
-        if (campaign.isActive) {
-            campaign.isActive = false;
+        if (activeCampaignId == campaignId) {
+            activeCampaignId = 0; // Ensure global active state is cleared
             emit CampaignDeactivated(campaignId);
         }
         // Note: Consider adding an 'isEnded' flag to the Campaign struct if you need
@@ -454,7 +441,7 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
         onlyIfEligible
         onlyIfNotVoted(campaignId)
         onlyValidCampaign(campaignId)
-        onlyActiveCampaign(campaignId)
+        onlyActiveCampaign(campaignId) // Now checks global active state
         onlyBasicCampaign(campaignId)
     {
         require(_selectedChoiceIndices.length > 0, "ABOVEBallot: You must select at least one choice.");
@@ -637,7 +624,7 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
         onlyIfEligible
         onlyIfNotVoted(campaignId)
         onlyValidCampaign(campaignId)
-        onlyActiveCampaign(campaignId)
+        onlyActiveCampaign(campaignId) // Now checks global active state
         onlyBallotCampaign(campaignId)
         onlyFinalizedCampaign(campaignId) // Ballot campaigns must be finalized before voting
     {
@@ -716,6 +703,8 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
 
     /**
      * @dev Gets the metadata of a specific campaign.
+     *      Note: The 'isActive' status is determined by the global activeCampaignId variable.
+     *      Use isCampaignActive(campaignId) to check this status.
      * @param campaignId The ID of the campaign.
      * @return The Campaign struct.
      */
@@ -724,11 +713,28 @@ contract ABOVEBallot is Ownable { // <-- Explicitly inherit from Ownable
     }
 
     /**
+     * @dev Checks if a specific campaign is the globally active one.
+     * @param campaignId The ID of the campaign to check.
+     * @return True if the campaign is active, false otherwise.
+     */
+    function isCampaignActive(uint256 campaignId) external view returns (bool) {
+        return activeCampaignId == campaignId;
+    }
+
+    /**
      * @dev Gets the next campaign ID that will be assigned.
      * @return The next campaign ID.
      */
     function getNextCampaignId() external view returns (uint256) {
         return _nextCampaignId;
+    }
+
+    /**
+     * @dev Gets the globally active campaign ID.
+     * @return The ID of the currently active campaign, or 0 if none.
+     */
+    function getActiveCampaignId() external view returns (uint256) {
+        return activeCampaignId;
     }
 
     // --- Utility Functions ---

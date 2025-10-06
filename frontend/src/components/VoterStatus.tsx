@@ -3,12 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useVoterRegistry } from '../hooks/useVoterRegistry';
 import { useABOVEBallot } from '../hooks/useABOVEBallot';
-import { isAddress, formatUnits } from 'viem'; // Import formatUnits for token display
+import { isAddress, formatUnits } from 'viem';
 
 const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = null }) => {
   const { address: userAddress, isConnected } = useAccount();
   const {
-    // Read data from VoterRegistry
     isAllowed,
     isCheckingAllowed,
     isAllowedError,
@@ -17,7 +16,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     isFetchingVoterCount,
     isVoterCountError,
     voterCountError,
-    // Self-Registration
     handleRegisterAsVoter,
     isRegisteringAsVoter,
     isRegisterAsVoterSuccess,
@@ -25,102 +23,85 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     registerAsVoterError,
   } = useVoterRegistry();
 
-  // --- Destructure functions and state from useABOVEBallot ---
   const {
     campaign,
     isFetchingCampaign,
     isCampaignError,
     campaignError,
-    // Set Description
     handleSetCampaignDescription,
     isSettingDescription,
     isSetDescriptionSuccess,
     isSetDescriptionError,
     setDescriptionError,
-    // Create Campaign
     handleCreateCampaign,
     isCreatingCampaign,
     isCreateCampaignSuccess,
     isCreateCampaignError,
     createCampaignError,
-    // Activate Campaign
     handleActivateCampaign,
     isActivatingCampaign,
-    isActivateCampaignSuccess,
-    isActivateCampaignError,
-    activateCampaignError,
-    // Deactivate Campaign
+    isActivateCampaignTxConfirmed, // Use the confirmed state
     handleDeactivateCampaign,
     isDeactivatingCampaign,
     isDeactivateCampaignSuccess,
     isDeactivateCampaignError,
+    isActivateCampaignError,
     deactivateCampaignError,
-    // Set Basic Campaign
+    activateCampaignError,
     handleSetBasicCampaign,
     isSettingBasicCampaign,
     isSetBasicCampaignSuccess,
     isSetBasicCampaignError,
     setBasicCampaignError,
-    // Add Ballot Position
     handleAddBallotPosition,
     isAddingBallotPosition,
     isAddBallotPositionSuccess,
     isAddBallotPositionError,
     addBallotPositionError,
-    // Add Candidate (Single)
     handleAddCandidate,
     isAddingCandidate,
     isAddCandidateSuccess,
     isAddCandidateError,
     addCandidateError,
-    // Add Candidates (Batch)
-    handleAddCandidates, // New handler for batch add
-    isAddingCandidates, // New loading state
-    isAddCandidatesSuccess, // New success state
-    isAddCandidatesError, // New error state
-    addCandidatesError, // New error object
-    // Finalize Ballot Setup
+    handleAddCandidates,
+    isAddingCandidates,
+    isAddCandidatesSuccess,
+    isAddCandidatesError,
+    addCandidatesError,
     handleFinalizeBallotSetup,
     isFinalizingBallotSetup,
     isFinalizeBallotSetupSuccess,
     isFinalizeBallotSetupError,
     finalizeBallotSetupError,
-    // --- NEW: End Campaign ---
-    handleEndCampaign, // New handler
-    isEndingCampaign, // New loading state
-    isEndCampaignSuccess, // New success state
-    isEndCampaignError, // New error state
-    endCampaignError, // New error object
-    // --- END NEW ---
-    // Get Next Campaign ID
-    nextCampaignId,
-    isFetchingNextCampaignId,
-    isNextCampaignIdError,
-    nextCampaignIdError,
-    // --- NEW: Token Data and Approval ---
+    handleEndCampaign,
+    isEndingCampaign,
+    isEndCampaignSuccess,
+    isEndCampaignError,
+    endCampaignError,
     aboveTokenBalance,
     isFetchingAboveTokenBalance,
     aboveTokenAllowance,
     isFetchingAboveTokenAllowance,
     CAMPAIGN_CREATION_FEE,
     isFetchingCampaignCreationFee,
-    // Approve Tokens
     handleApproveAboveTokens,
     isApprovingAboveTokens,
     isApproveAboveTokensSuccess,
     isApproveAboveTokensError,
     approveAboveTokensError,
+    // --- NEW: Import activeCampaignId ---
+    activeCampaignId,
     // --- END NEW ---
   } = useABOVEBallot(campaignId);
-  // --- END ---
 
-  // --- State for Voter Management ---
-  // State for adding voters is removed as it's not used in the decentralized model
-  // const [voterToAdd, setVoterToAdd] = useState<string>('');
-  // const [addVoterMessage, setAddVoterMessage] = useState<string>('');
-  // const [votersToAddBatch, setVotersToAddBatch] = useState<string>('');
-  // const [addVotersBatchMessage, setAddVotersBatchMessage] = useState<string>('');
-  // --- END State for Voter Management ---
+  // --- NEW: Check if Connected User is Campaign Creator ---
+  const isCampaignCreator = isConnected && campaign && userAddress && 
+                           campaign.creator.toLowerCase() === userAddress.toLowerCase();
+  // --- END NEW ---
+
+  // --- NEW: Compute if the selected campaign is active ---
+  const isCampaignActive = campaignId !== null && activeCampaignId === campaignId;
+  // --- END NEW ---
 
   // --- State for Campaign Description ---
   const [descriptionInput, setDescriptionInput] = useState<string>('');
@@ -145,14 +126,13 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
   const [ballotPositionMaxSelectionsInput, setBallotPositionMaxSelectionsInput] = useState<number>(1);
   const [addBallotPositionMessage, setAddBallotPositionMessage] = useState<string>('');
 
-  // --- NEW: Strict Sequential State Management ---
+  // --- Strict Sequential State Management ---
   // Track the index of the position that was *successfully* added last
   const [lastAddedPositionIndex, setLastAddedPositionIndex] = useState<number | null>(null);
   // Temporarily store the index we are *trying* to add, to use in useEffect
   const [pendingPositionIndex, setPendingPositionIndex] = useState<number | null>(null);
   // Track candidate names input for the currently active position input section
   const [candidateNamesForLastPosition, setCandidateNamesForLastPosition] = useState<string>('');
-  // --- END NEW ---
   // --- END State for Ballot Campaign Setup ---
 
   // --- State for Finalizing Ballot Campaign ---
@@ -163,12 +143,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
   const [showEndConfirmation, setShowEndConfirmation] = useState<boolean>(false);
   const [endCampaignMessage, setEndCampaignMessage] = useState<string>('');
   // --- END NEW ---
-
-  // --- Handlers for Voter Management ---
-  // Handlers for adding voters are removed as it's not used in the decentralized model
-  // const handleAddVoterSubmit = (e: React.FormEvent) => { ... }
-  // const handleAddVotersBatchSubmit = (e: React.FormEvent) => { ... }
-  // --- END Handlers for Voter Management ---
 
   // --- Handler for Creating Campaign ---
   const handleCreateCampaignSubmit = (e: React.FormEvent) => {
@@ -183,9 +157,7 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     const typeEnum = createCampaignType === 'Basic' ? 1 : 2;
     handleCreateCampaign(createCampaignDescription, typeEnum);
   };
-  // --- END Handler for Creating Campaign ---
 
-  // --- Handler for Setting Campaign Description ---
   const handleSetDescriptionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSetDescriptionMessage('');
@@ -202,11 +174,7 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
 
     handleSetCampaignDescription(descriptionInput);
   };
-  // --- END Handler for Setting Campaign Description ---
 
-  // --- Handlers for Campaign Setup ---
-
-  // --- Handler for Setting Basic Campaign ---
   const handleSetBasicCampaignSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSetBasicCampaignMessage('');
@@ -229,7 +197,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     handleSetBasicCampaign(choicesArray, isBasicSingleVoteInput);
   };
 
-  // --- Handler for Adding Ballot Position (Strict Sequential) ---
   const handleAddBallotPositionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAddBallotPositionMessage('');
@@ -250,28 +217,19 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
         return;
     }
 
-    // --- NEW: Set pending index for strict sequential flow ---
-    // Calculate the next position index based on the last successfully added one.
-    // This assumes positions are added sequentially starting from 0.
     const nextPositionIndex = lastAddedPositionIndex !== null ? lastAddedPositionIndex + 1 : 0;
     setPendingPositionIndex(nextPositionIndex);
-    // --- END NEW ---
-
-    // Call the hook function
     handleAddBallotPosition(name, ballotPositionMaxSelectionsInput);
   };
 
-  // --- NEW: Handler for Adding Candidates (Batch) for the Last Added Position ---
-  const handleAddCandidatesSubmit = () => { // No longer takes positionIndex as arg
+  const handleAddCandidatesSubmit = () => {
     if (campaignId === null) {
       console.error("Cannot add candidates: campaignId is null");
-      // Optionally set an error message in state
       return;
     }
 
     if (lastAddedPositionIndex === null) {
          console.error("Cannot add candidates: No position confirmed yet.");
-         // Optionally set an error message in state
          return;
     }
 
@@ -283,17 +241,12 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
 
     if (namesArray.length === 0) {
         console.error("No candidate names provided for position", lastAddedPositionIndex);
-        // Optionally set an error message in state
         return;
     }
 
-    // Call the new batch add function from the hook, using the tracked index
     handleAddCandidates(namesArray, BigInt(lastAddedPositionIndex));
-    // Note: Clearing inputs handled by success useEffect
   };
-  // --- END NEW Handler ---
 
-  // --- Handler for Finalizing Ballot Setup ---
   const handleFinalizeBallotSetupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFinalizeBallotMessage('');
@@ -306,11 +259,9 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     handleFinalizeBallotSetup();
   };
 
-  // --- NEW: Handler for Ending Campaign ---
   const handleEndCampaignClick = () => {
-    // Show confirmation UI instead of calling directly
     setShowEndConfirmation(true);
-    setEndCampaignMessage(''); // Clear any previous message
+    setEndCampaignMessage('');
   };
 
   const handleConfirmEndCampaign = () => {
@@ -319,17 +270,14 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
         setShowEndConfirmation(false);
         return;
     }
-    handleEndCampaign(campaignId); // Call the hook function
-    setShowEndConfirmation(false); // Hide confirmation after triggering
+    handleEndCampaign(campaignId);
+    setShowEndConfirmation(false);
   };
 
   const handleCancelEndCampaign = () => {
     setShowEndConfirmation(false);
-    setEndCampaignMessage(''); // Clear message on cancel
+    setEndCampaignMessage('');
   };
-  // --- END NEW Handler ---
-
-  // --- END Handlers for Campaign Setup ---
 
   // --- useEffects for Clearing Inputs and Showing Messages on Success ---
   useEffect(() => {
@@ -339,59 +287,30 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     }
   }, [isSetBasicCampaignSuccess]);
 
-  // --- NEW: useEffect for Strict Sequential Ballot Position Addition ---
   useEffect(() => {
     if (isAddBallotPositionSuccess && pendingPositionIndex !== null) {
-        // Clear position input fields
         setBallotPositionNameInput('');
         setBallotPositionMaxSelectionsInput(1);
         setAddBallotPositionMessage('Ballot position added successfully!');
-
-        // --- UPDATED: Update state for strict sequential setup ---
-        // Set the last added position index to the one we just confirmed
         setLastAddedPositionIndex(pendingPositionIndex);
-        // Clear the pending index
         setPendingPositionIndex(null);
-        // Clear the candidate names input for the new section
         setCandidateNamesForLastPosition('');
-        // Note: The UI section for candidates will now render based on `lastAddedPositionIndex`
-        // --- END UPDATED ---
     }
-    // Reset message/error if the action fails or is reset
-    if (isAddBallotPositionError) {
-         // Optionally handle error state, e.g., keep the input section visible or show error
-         // For now, we just log or could set a message, but the main state change happens on success.
-    }
-  }, [isAddBallotPositionSuccess, isAddBallotPositionError, pendingPositionIndex]); // Depend on success, error, and pending index
+  }, [isAddBallotPositionSuccess, isAddBallotPositionError, pendingPositionIndex]);
 
-  // --- NEW: useEffect for Clearing Candidate Input after Successful Addition ---
   useEffect(() => {
-    if (isAddCandidateSuccess || isAddCandidatesSuccess) { // Handle both single and batch success
+    if (isAddCandidateSuccess || isAddCandidatesSuccess) {
         const successMessage = isAddCandidateSuccess ? 'Candidate added successfully!' : 'Candidates added successfully!';
-        setAddBallotPositionMessage(successMessage); // Reuse message state or create a new one if needed
-
-        // --- NEW: Clear candidate input after successful addition ---
+        setAddBallotPositionMessage(successMessage);
         if (isAddCandidatesSuccess) {
-             // Clear the candidate names input specifically for the last added position
              setCandidateNamesForLastPosition('');
-             // Optionally, you might want to clear `lastAddedPositionIndex` here
-             // to hide the section until the next position is added, enforcing strict sequence.
-             // setLastAddedPositionIndex(null);
-             // Let's not do this by default, keep the section visible after adding candidates
-             // until the next position is added or finalized.
         }
-        // --- END NEW ---
     }
-    // Handle errors if needed (e.g., setAddBallotPositionMessage with error color)
   }, [isAddCandidateSuccess, isAddCandidatesSuccess]);
-  // --- END NEW useEffect ---
 
   useEffect(() => {
     if (isFinalizeBallotSetupSuccess) {
         setFinalizeBallotMessage('Ballot campaign finalized successfully!');
-        // Optionally, clear the last added position index upon finalization
-        // if you want to enforce starting fresh after finalizing.
-        // setLastAddedPositionIndex(null);
     }
   }, [isFinalizeBallotSetupSuccess]);
 
@@ -410,10 +329,10 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
   }, [isCreateCampaignSuccess]);
 
   useEffect(() => {
-    if (isActivateCampaignSuccess) {
+    if (isActivateCampaignTxConfirmed) {
          setCreateCampaignMessage('Campaign activated successfully!');
     }
-  }, [isActivateCampaignSuccess]);
+  }, [isActivateCampaignTxConfirmed]);
 
   useEffect(() => {
     if (isDeactivateCampaignSuccess) {
@@ -421,19 +340,14 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
     }
   }, [isDeactivateCampaignSuccess]);
 
-  // --- NEW: useEffect for End Campaign ---
   useEffect(() => {
     if (isEndCampaignSuccess) {
          setEndCampaignMessage('Campaign ended successfully!');
-         // Optionally clear other states related to this campaign if needed
-         // Reset local state for ballot setup if this was a ballot campaign
          setLastAddedPositionIndex(null);
          setPendingPositionIndex(null);
          setCandidateNamesForLastPosition('');
-         // Reset basic setup state if this was a basic campaign
          setBasicChoicesInput('');
          setIsBasicSingleVoteInput(true);
-         // Clear messages related to setup
          setSetBasicCampaignMessage('');
          setAddBallotPositionMessage('');
          setFinalizeBallotMessage('');
@@ -442,8 +356,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
          setEndCampaignMessage(`Error ending campaign: ${endCampaignError?.message || 'Unknown error'}`);
     }
   }, [isEndCampaignSuccess, isEndCampaignError, endCampaignError]);
-  // --- END NEW useEffect ---
-  // --- END useEffects ---
 
   if (!isConnected) {
     return (
@@ -455,8 +367,7 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
 
   return (
     <div className="voter-status">
-      <h3>Campaign Controls</h3> {/* Updated header text */}
-      {/* Display basic voter status */}
+      <h3>Campaign Controls</h3>
       {isCheckingAllowed ? (
         <p>Checking if you are registered...</p>
       ) : isAllowedError ? (
@@ -474,19 +385,16 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
          <p><strong>Total Registered Voters:</strong> {(allowedVoterCount ?? 0n).toString()}</p>
       )}
 
-      {/* --- NEW: Self-Registration UI --- */}
-      {/* Show the registration button only if the user is connected but NOT already registered */}
       {isConnected && !isAllowed && (
         <div style={{ marginTop: '15px', padding: '10px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#f9f9f9' }}>
           <p><strong>Not registered to vote yet?</strong></p>
           <button
-            onClick={handleRegisterAsVoter} // Call the handler from the hook
-            disabled={isRegisteringAsVoter} // Disable while the transaction is pending
+            onClick={handleRegisterAsVoter}
+            disabled={isRegisteringAsVoter}
             style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             {isRegisteringAsVoter ? 'Registering...' : 'Register to Vote (Testnet)'}
           </button>
-          {/* Display status messages below the button */}
           {isRegisterAsVoterSuccess && (
             <p style={{ color: 'green', marginTop: '10px' }}>Registration successful! You can now create campaigns.</p>
           )}
@@ -495,15 +403,11 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
           )}
         </div>
       )}
-      {/* --- END NEW: Self-Registration UI --- */}
 
-      {/* Campaign Controls - Updated Summary Text */}
       <details>
-        <summary>Campaign Controls (Create & Setup)</summary> {/* Updated summary text */}
+        <summary>Campaign Controls (Create & Setup)</summary>
 
-        {/* --- Create Campaign Form --- */}
         <h4>Create New Campaign</h4>
-        {/* Display Token Balance and Allowance */}
         {isFetchingAboveTokenBalance ? (
           <p>Loading ABOVE token balance...</p>
         ) : (
@@ -516,7 +420,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
           <p><strong>Required Fee:</strong> {formatUnits(CAMPAIGN_CREATION_FEE, 18)} ABOVE</p>
         ) : null}
 
-        {/* Check if user has enough tokens and if allowance is sufficient */}
         {isFetchingAboveTokenAllowance || isFetchingAboveTokenBalance || isFetchingCampaignCreationFee ? (
           <p>Checking token status...</p>
         ) : (
@@ -529,7 +432,7 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
                   <>
                     <p style={{ color: 'orange' }}>Insufficient token allowance for campaign creation fee. Please approve the ABOVEBallot contract.</p>
                     <button
-                      onClick={() => handleApproveAboveTokens(CAMPAIGN_CREATION_FEE)} // Approve for the exact fee
+                      onClick={() => handleApproveAboveTokens(CAMPAIGN_CREATION_FEE)}
                       disabled={isApprovingAboveTokens}
                       style={{ marginBottom: '10px' }}
                     >
@@ -539,7 +442,6 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
                     {isApproveAboveTokensError && <p style={{ color: 'red' }}>Approval failed: {approveAboveTokensError?.message}</p>}
                   </>
                 ) : (
-                  /* Show the actual Create Campaign Form/Button if allowance is sufficient */
                   <form onSubmit={handleCreateCampaignSubmit}>
                     <label htmlFor="createCampaignDescription">Description:</label>
                     <textarea
@@ -575,13 +477,10 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
         {isCreateCampaignSuccess && <p style={{ color: 'green' }}>Campaign created successfully!</p>}
         {isCreateCampaignError && <p style={{ color: 'red' }}>Error creating campaign: {createCampaignError?.message}</p>}
         {createCampaignMessage && <p style={{ color: createCampaignMessage.includes('successfully') ? 'green' : 'red' }}>{createCampaignMessage}</p>}
-        {/* --- END Create Campaign Form --- */}
 
-        {/* --- Separator --- */}
         <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
 
-        {/* --- Activate/Deactivate Campaign (if a campaignId is provided) --- */}
-        {campaignId !== null && (
+        {campaignId !== null && isCampaignCreator && (
           <>
             <h4>Activate/Deactivate Campaign (ID: {campaignId.toString()})</h4>
             {isFetchingCampaign ? (
@@ -590,14 +489,22 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
               <p style={{ color: 'red' }}>Error loading campaign status: {campaignError?.message}</p>
             ) : campaign ? (
               <>
-                <p><strong>Status:</strong> {campaign.isActive ? 'Active' : (campaign.isFinalized ? 'Finalized' : 'Inactive')}</p>
-                <button onClick={() => handleActivateCampaign()} disabled={isActivatingCampaign || campaign.isActive}>
+                {/* --- Use isCampaignActive instead of campaign.isActive --- */}
+                <p><strong>Status:</strong> {isCampaignActive ? 'Active' : (campaign.isFinalized ? 'Finalized' : 'Inactive')}</p>
+                <button 
+                  onClick={() => handleActivateCampaign()} 
+                  disabled={isActivatingCampaign || isCampaignActive} // <-- Now uses isCampaignActive
+                >
                   {isActivatingCampaign ? 'Activating...' : 'Activate Campaign'}
                 </button>
-                <button onClick={() => handleDeactivateCampaign()} disabled={isDeactivatingCampaign || !campaign.isActive} style={{ marginLeft: '10px' }}>
+                <button 
+                  onClick={() => handleDeactivateCampaign()} 
+                  disabled={isDeactivatingCampaign || !isCampaignActive} // <-- Now uses isCampaignActive
+                  style={{ marginLeft: '10px' }}
+                >
                   {isDeactivatingCampaign ? 'Deactivating...' : 'Deactivate Campaign'}
                 </button>
-                {isActivateCampaignSuccess && <p style={{ color: 'green' }}>Campaign activated successfully!</p>}
+                {isActivateCampaignTxConfirmed && <p style={{ color: 'green' }}>Campaign activated successfully!</p>}
                 {isActivateCampaignError && <p style={{ color: 'red' }}>Error activating campaign: {activateCampaignError?.message}</p>}
                 {isDeactivateCampaignSuccess && <p style={{ color: 'green' }}>Campaign deactivated successfully!</p>}
                 {isDeactivateCampaignError && <p style={{ color: 'red' }}>Error deactivating campaign: {deactivateCampaignError?.message}</p>}
@@ -605,18 +512,11 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
             ) : (
               <p>Campaign data not found.</p>
             )}
-            {/* --- Separator --- */}
             <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
           </>
         )}
 
-        {/* --- REMOVED: Add Voters Sections --- */}
-        {/* The sections for "Add Single Voter" and "Add Multiple Voters (Batch)" have been removed
-             as voter management is decentralized for the testnet. Any user holding ABOVE tokens can vote. */}
-        {/* --- END REMOVED --- */}
-
-        {/* --- Set Campaign Description (if campaignId is provided) --- */}
-        {campaignId !== null && (
+        {campaignId !== null && isCampaignCreator && (
           <>
             <h4 style={{ marginTop: '20px' }}>Set Campaign Description (ID: {campaignId.toString()})</h4>
             <form onSubmit={handleSetDescriptionSubmit}>
@@ -649,16 +549,13 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
             )}
           </>
         )}
-        {/* --- END Set Campaign Description --- */}
 
-        {/* --- Separator --- */}
         <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
 
-        {/* --- Basic Campaign Setup (if campaignId is provided) --- */}
-        {campaignId !== null && (
+        {campaignId !== null && campaign?.campaignType === 1 && isCampaignCreator && (
           <>
             <h4>Setup Basic Voting Campaign (ID: {campaignId.toString()})</h4>
-            {(campaign?.campaignType !== 1 || campaign?.isFinalized) && campaign?.campaignType !== 0 && (
+            {(campaign?.campaignType !== 1 || campaign?.isFinalized) && campaign?.campaignType !== 1 && (
                  <p style={{ color: 'orange' }}><em>A campaign is already set or finalized. Setting a new Basic campaign will overwrite it.</em></p>
             )}
             <form onSubmit={handleSetBasicCampaignSubmit}>
@@ -690,20 +587,16 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
             {isSetBasicCampaignError && <p style={{ color: 'red' }}>Error setting basic campaign: {setBasicCampaignError?.message}</p>}
           </>
         )}
-        {/* --- END Basic Campaign Setup --- */}
 
-        {/* --- Separator --- */}
         <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
 
-        {/* --- Ballot Campaign Setup (if campaignId is provided) - Strict Sequential --- */}
-        {campaignId !== null && (
+        {campaignId !== null && campaign?.campaignType === 2 && isCampaignCreator && (
           <>
             <h4>Setup Ballot Voting Campaign (ID: {campaignId.toString()})</h4>
-            {(campaign?.campaignType !== 2 || campaign?.isFinalized) && campaign?.campaignType !== 0 && (
+            {(campaign?.campaignType !== 2 || campaign?.isFinalized) && campaign?.campaignType !== 2 && (
                  <p style={{ color: 'orange' }}><em>A campaign is already set or finalized. Adding positions/candidates will modify the current Ballot setup.</em></p>
             )}
 
-            {/* --- Add Ballot Position Form --- */}
             <h5>Add Ballot Position</h5>
             <form onSubmit={(e) => { e.preventDefault(); handleAddBallotPositionSubmit(e); }}>
               <label htmlFor="ballotPositionName">Position Name:</label>
@@ -733,38 +626,29 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
             {addBallotPositionMessage && <p style={{ color: addBallotPositionMessage.includes('successfully') ? 'green' : 'red' }}>{addBallotPositionMessage}</p>}
             {isAddBallotPositionError && <p style={{ color: 'red' }}>Error adding ballot position: {addBallotPositionError?.message}</p>}
 
-            {/* --- NEW: Dynamic Candidate Input Section (Only for the last added position) - Strict Sequential --- */}
-            {/* Render input section ONLY if a position was successfully added */}
             {lastAddedPositionIndex !== null && (
               <div key={lastAddedPositionIndex} style={{ marginTop: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '5px' }}>
                 <h5>Add Candidates for Position Index: {lastAddedPositionIndex}</h5>
                 <label htmlFor={`candidateNames-${lastAddedPositionIndex}`}>Candidate Names (one per line):</label>
                 <textarea
                   id={`candidateNames-${lastAddedPositionIndex}`}
-                  value={candidateNamesForLastPosition} // Bind to the specific state variable
-                  onChange={(e) => setCandidateNamesForLastPosition(e.target.value)} // Update the specific state variable
+                  value={candidateNamesForLastPosition}
+                  onChange={(e) => setCandidateNamesForLastPosition(e.target.value)}
                   placeholder={`Candidate 1&#10;Candidate 2&#10;...`}
                   rows={5}
                   cols={50}
                 />
                 <br />
                 <button
-                  type="button" // Important: type="button" to prevent form submission
-                  onClick={handleAddCandidatesSubmit} // Call the updated handler
-                  disabled={isAddingCandidates} // Disable while any batch add is in progress
+                  type="button"
+                  onClick={handleAddCandidatesSubmit}
+                  disabled={isAddingCandidates}
                 >
                   {isAddingCandidates ? 'Adding Candidates...' : 'Add Candidates'}
                 </button>
-                 {/* Display status messages for adding candidates for this position */}
-                 {/* Note: Reusing addBallotPositionMessage for simplicity, consider a dedicated state */}
-                 {/* The useEffect above handles success messages. Error messages could be added similarly. */}
-                 {/* {isAddCandidatesSuccess && ( ... ) } */ /* Handled by the useEffect above */}
-                 {/* {isAddCandidatesError && ( ... ) */}
               </div>
             )}
-            {/* --- END NEW: Dynamic Candidate Input Section --- */}
 
-            {/* --- Finalize Ballot Setup Form --- */}
             <h5 style={{ marginTop: '15px' }}>Finalize Ballot Campaign</h5>
             <p>Once you have added all positions and candidates, click below to finalize the setup.</p>
             <form onSubmit={handleFinalizeBallotSetupSubmit}>
@@ -776,16 +660,12 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
             {isFinalizeBallotSetupError && <p style={{ color: 'red' }}>Error finalizing ballot setup: {finalizeBallotSetupError?.message}</p>}
           </>
         )}
-        {/* --- END Ballot Campaign Setup --- */}
 
-        {/* --- Separator --- */}
         <hr style={{ margin: '20px 0', borderTop: '1px solid #ccc' }} />
 
-        {/* --- NEW: End Campaign Section (if campaignId is provided and campaign is finalized) --- */}
-        {campaignId !== null && campaign?.isFinalized && (
+        {campaignId !== null && campaign?.isFinalized && isCampaignCreator && (
           <>
             <h4>Danger Zone: End Campaign (ID: {campaignId.toString()})</h4>
-            {/* --- Cautionary Warning --- */}
             <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeaa7', color: '#856404', padding: '10px', borderRadius: '5px', marginBottom: '15px' }}>
               <p><strong>⚠️ Caution:</strong></p>
               <ul>
@@ -795,9 +675,7 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
                 <li><strong>Data Persistence:</strong> Please note, while the contract state is cleared, the blockchain transaction history showing that this campaign existed and was voted on remains permanently immutable.</li>
               </ul>
             </div>
-            {/* --- END Cautionary Warning --- */}
 
-            {/* --- End Button & Confirmation UI --- */}
             {!showEndConfirmation ? (
               <button
                 onClick={handleEndCampaignClick}
@@ -822,18 +700,14 @@ const VoterStatus: React.FC<{ campaignId: bigint | null }> = ({ campaignId = nul
                 </button>
               </div>
             )}
-            {/* --- END End Button & Confirmation UI --- */}
 
-            {/* --- Status Messages --- */}
             {endCampaignMessage && (
               <p style={{ color: endCampaignMessage.includes('successfully') ? 'green' : 'red', marginTop: '10px' }}>
                 {endCampaignMessage}
               </p>
             )}
-            {/* --- END Status Messages --- */}
           </>
         )}
-        {/* --- END NEW: End Campaign Section --- */}
 
       </details>
     </div>

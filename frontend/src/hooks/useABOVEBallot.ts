@@ -1,61 +1,40 @@
 // frontend/src/hooks/useABOVEBallot.ts
-import { useReadContract, useWriteContract, useAccount } from 'wagmi';
-// Import formatUnits from viem
-import { formatUnits } from 'viem';
+import { useEffect } from 'react';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { useQueryClient } from '@tanstack/react-query';
 import { CONTRACT_ADDRESSES, ABOVE_BALLOT_ABI, ABOVE_TOKEN_ABI } from '../contracts/contractConfig';
-// Import specific types from viem if needed for better typing, but avoid 'any'
-import type { Address } from 'viem'; // Safer import for Address type
+import type { Address } from 'viem';
 
-// --- Define TypeScript types for complex contract structures ---
-// These should ideally match your Solidity structs as closely as possible.
 type Position = {
   name: string;
-  maxSelections: number; // Maps to uint8 in Solidity
-  candidateCount: bigint; // Maps to uint256
-  // Add other fields from the Solidity struct if needed
-  [key: string]: any; // Catch-all for potential ABI mismatch
+  maxSelections: number;
+  candidateCount: bigint;
+  [key: string]: any;
 };
 
 type Candidate = {
   name: string;
-  positionIndex: bigint; // uint256
-  // Add other fields from the Solidity struct if needed
+  positionIndex: bigint;
   [key: string]: any;
 };
 
-// Define the Campaign type to match the Solidity struct
 type Campaign = {
-  id: bigint; // uint256
-  campaignType: 0 | 1 | 2; // CampaignType enum (0: Undefined, 1: Basic, 2: Ballot) // uint8
-  description: string; // string
-  isActive: boolean; // bool
-  isFinalized: boolean; // bool
-  createdAt: bigint; // uint256
-  finalizedAt: bigint; // uint256
-  creator: Address; // address - Add the creator field
-  [key: string]: any; // Catch-all for potential ABI mismatch
+  id: bigint;
+  campaignType: 0 | 1 | 2;
+  description: string;
+  isFinalized: boolean;
+  createdAt: bigint;
+  finalizedAt: bigint;
+  creator: Address;
+  [key: string]: any;
 };
 
-// Enum values from Solidity (0: Undefined, 1: Basic, 2: Ballot)
-// Using a union type for better type safety where possible
-// type CampaignType = 0 | 1 | 2; // Defined inline above as part of Campaign type
-
-/**
- * Custom hook for interacting with the ABOVEBallot contract.
- * Provides functions to get campaign info, check vote status, cast votes, and manage campaigns.
- * This version aims for better compatibility with TypeScript/Viem/Wagmi typing.
- * Includes logic to fetch the contract owner.
- * Integrates with the native ABOVE token for fees and rewards.
- * Supports decentralized campaign creation and management.
- * Voter eligibility is simplified for testnet (must hold ABOVE tokens).
- * Introduces an 'endCampaign' function for formal conclusion and result recording.
- */
 export const useABOVEBallot = (campaignId: bigint | null) => {
   const { address: userAddress } = useAccount();
+  const queryClient = useQueryClient();
 
   // --- Read Functions ---
 
-  // --- NEW: Fetch Contract Owner Address ---
   const {
     data: contractOwnerData,
     isLoading: isFetchingOwner,
@@ -64,12 +43,10 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
   } = useReadContract({
     address: CONTRACT_ADDRESSES.aboveBallot,
     abi: ABOVE_BALLOT_ABI,
-    functionName: 'owner', // This is the standard Ownable function
+    functionName: 'owner',
   });
   const contractOwner = contractOwnerData as Address | undefined;
-  // --- END NEW ---
 
-  // --- 1. voterRegistry Address ---
   const {
     data: voterRegistryAddressData,
     isLoading: isFetchingVoterRegistry,
@@ -80,11 +57,8 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     abi: ABOVE_BALLOT_ABI,
     functionName: 'voterRegistry',
   });
-  // Type assertion for the specific return type if needed, or rely on inferred type
   const voterRegistryAddress = voterRegistryAddressData as Address | undefined;
 
-
-  // --- 2. hasVotedInCampaign (per user, per campaign) ---
   const {
     data: hasVotedData,
     isLoading: isCheckingVoteStatus,
@@ -96,13 +70,11 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     functionName: 'hasVotedInCampaign',
     args: campaignId !== null && userAddress ? [campaignId, userAddress] : undefined,
     query: {
-      enabled: campaignId !== null && !!userAddress, // Only run if campaignId and user is connected
+      enabled: campaignId !== null && !!userAddress,
     },
   });
   const hasVoted = hasVotedData as boolean | undefined;
 
-
-  // --- 3. totalVotesPerCampaign ---
   const {
     data: totalVotesCastData,
     isLoading: isFetchingTotalVotes,
@@ -114,13 +86,11 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     functionName: 'totalVotesPerCampaign',
     args: campaignId !== null ? [campaignId] : undefined,
     query: {
-      enabled: campaignId !== null, // Only run if campaignId is provided
+      enabled: campaignId !== null,
     },
   });
   const totalVotesCast = totalVotesCastData as bigint | undefined;
 
-
-  // --- 4. getCampaign (metadata for a specific campaign) ---
   const {
     data: campaignData,
     isLoading: isFetchingCampaign,
@@ -132,13 +102,11 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     functionName: 'getCampaign',
     args: campaignId !== null ? [campaignId] : undefined,
     query: {
-      enabled: campaignId !== null, // Only run if campaignId is provided
+      enabled: campaignId !== null,
     },
   });
   const campaign = campaignData as Campaign | undefined;
 
-
-  // --- 5. isBasicSingleVoteByCampaign (per campaign) ---
   const {
     data: isBasicSingleVoteData,
     isLoading: isCheckingSingleVote,
@@ -148,17 +116,15 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     address: CONTRACT_ADDRESSES.aboveBallot,
     abi: ABOVE_BALLOT_ABI,
     functionName: 'isBasicSingleVoteByCampaign',
-    args: campaignId !== null && campaign?.campaignType === 1 ? [campaignId] : undefined, // Only fetch if Basic campaign
+    args: campaignId !== null && campaign?.campaignType === 1 ? [campaignId] : undefined,
     query: {
-      enabled: campaignId !== null && campaign?.campaignType === 1, // Only fetch if Basic campaign
+      enabled: campaignId !== null && campaign?.campaignType === 1,
     },
   });
   const isBasicSingleVote = isBasicSingleVoteData as boolean | undefined;
 
-
-  // --- 6. getBasicResults (Choices & Votes for a specific Basic campaign) ---
   const {
-    data: basicResultsData, // This will be a tuple [string[], bigint[]]
+    data: basicResultsData,
     isLoading: isFetchingBasicResults,
     isError: isBasicResultsError,
     error: basicResultsError,
@@ -168,17 +134,14 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     functionName: 'getBasicResults',
     args: campaignId !== null && campaign?.campaignType === 1 && campaign?.isFinalized ? [campaignId] : undefined,
     query: {
-      enabled: campaignId !== null && campaign?.campaignType === 1 && campaign?.isFinalized, // Only fetch if Basic and finalized
+      enabled: campaignId !== null && campaign?.campaignType === 1 && campaign?.isFinalized,
     },
   });
-  // Destructure the tuple data safely
   const basicChoices = (basicResultsData?.[0] as string[] | undefined) ?? [];
   const basicVotes = (basicResultsData?.[1] as bigint[] | undefined) ?? [];
 
-
-  // --- 7. getBallotResults (Positions, Candidates, Votes for a specific Ballot campaign) ---
   const {
-    data: ballotResultsData, // This will be a tuple [Position[], Candidate[], bigint[]]
+    data: ballotResultsData,
     isLoading: isFetchingBallotResults,
     isError: isBallotResultsError,
     error: ballotResultsError,
@@ -188,15 +151,13 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     functionName: 'getBallotResults',
     args: campaignId !== null && campaign?.campaignType === 2 && campaign?.isFinalized ? [campaignId] : undefined,
     query: {
-      enabled: campaignId !== null && campaign?.campaignType === 2 && campaign?.isFinalized, // Only fetch if Ballot and finalized
+      enabled: campaignId !== null && campaign?.campaignType === 2 && campaign?.isFinalized,
     },
   });
-  // Destructure the tuple data safely
   const ballotPositions = (ballotResultsData?.[0] as Position[] | undefined) ?? [];
   const ballotCandidates = (ballotResultsData?.[1] as Candidate[] | undefined) ?? [];
   const ballotCandidateVotes = (ballotResultsData?.[2] as bigint[] | undefined) ?? [];
 
-  // --- NEW: 8. Read Next Campaign ID (Global) ---
   const {
     data: nextCampaignIdData,
     isLoading: isFetchingNextCampaignId,
@@ -208,45 +169,39 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     functionName: 'getNextCampaignId',
   });
   const nextCampaignId = nextCampaignIdData as bigint | undefined;
-  // --- END NEW ---
 
-  // --- NEW: 9. Fetch ABOVE Token Balance ---
   const {
     data: aboveTokenBalanceData,
     isLoading: isFetchingAboveTokenBalance,
     isError: isAboveTokenBalanceError,
     error: aboveTokenBalanceError,
   } = useReadContract({
-    address: CONTRACT_ADDRESSES.aboveToken, // Use the ABOVE token address
-    abi: ABOVE_TOKEN_ABI,                 // Use the ABOVE token ABI
+    address: CONTRACT_ADDRESSES.aboveToken,
+    abi: ABOVE_TOKEN_ABI,
     functionName: 'balanceOf',
     args: userAddress ? [userAddress] : undefined,
     query: {
-      enabled: !!userAddress, // Only fetch if user is connected
+      enabled: !!userAddress,
     },
   });
   const aboveTokenBalance = aboveTokenBalanceData as bigint | undefined;
-  // --- END NEW ---
 
-  // --- NEW: 10. Fetch ABOVE Token Allowance ---
   const {
     data: aboveTokenAllowanceData,
     isLoading: isFetchingAboveTokenAllowance,
     isError: isAboveTokenAllowanceError,
     error: aboveTokenAllowanceError,
   } = useReadContract({
-    address: CONTRACT_ADDRESSES.aboveToken, // Use the ABOVE token address
-    abi: ABOVE_TOKEN_ABI,                  // Use the ABOVE token ABI
+    address: CONTRACT_ADDRESSES.aboveToken,
+    abi: ABOVE_TOKEN_ABI,
     functionName: 'allowance',
     args: userAddress && CONTRACT_ADDRESSES.aboveBallot ? [userAddress, CONTRACT_ADDRESSES.aboveBallot] : undefined,
     query: {
-      enabled: !!(userAddress && CONTRACT_ADDRESSES.aboveBallot), // Only fetch if user and ballot address are available
+      enabled: !!(userAddress && CONTRACT_ADDRESSES.aboveBallot),
     },
   });
   const aboveTokenAllowance = aboveTokenAllowanceData as bigint | undefined;
-  // --- END NEW ---
 
-  // --- NEW: 11. Fetch Campaign Creation Fee (Constant) ---
   const {
     data: campaignCreationFeeData,
     isLoading: isFetchingCampaignCreationFee,
@@ -258,12 +213,22 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     functionName: 'CAMPAIGN_CREATION_FEE',
   });
   const CAMPAIGN_CREATION_FEE = campaignCreationFeeData as bigint | undefined;
-  // --- END NEW ---
 
+const {
+  data: activeCampaignIdData,
+  isLoading: isFetchingActiveCampaignId,
+  isError: isActiveCampaignIdError,
+  error: activeCampaignIdError,
+} = useReadContract({
+  address: CONTRACT_ADDRESSES.aboveBallot,
+  abi: ABOVE_BALLOT_ABI,
+  functionName: 'getActiveCampaignId',
+});
+
+const activeCampaignId = activeCampaignIdData as bigint | undefined;
 
   // --- Write Functions ---
 
-  // --- Existing: Voting Functions ---
   const {
     writeContract: voteBasicWrite,
     isPending: isVotingBasic,
@@ -305,9 +270,7 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
       args: [campaignId, selectedCandidateIds],
     });
   };
-  // --- END Existing: Voting Functions ---
 
-  // --- NEW: Token Approval Function ---
   const {
     writeContract: approveAboveTokensWrite,
     isPending: isApprovingAboveTokens,
@@ -318,17 +281,13 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
 
   const handleApproveAboveTokens = (amount: bigint) => {
     approveAboveTokensWrite({
-      address: CONTRACT_ADDRESSES.aboveToken, // Approve the ABOVE token contract
-      abi: ABOVE_TOKEN_ABI,                  // Use the ABOVE token ABI
+      address: CONTRACT_ADDRESSES.aboveToken,
+      abi: ABOVE_TOKEN_ABI,
       functionName: 'approve',
-      args: [CONTRACT_ADDRESSES.aboveBallot, amount], // Approve ABOVEBallot to spend 'amount'
+      args: [CONTRACT_ADDRESSES.aboveBallot, amount],
     });
   };
-  // --- END NEW: Token Approval Function ---
 
-  // --- NEW: Campaign Management Functions ---
-
-  // --- 1. createCampaign ---
   const {
     writeContract: createCampaignWrite,
     isPending: isCreatingCampaign,
@@ -337,7 +296,7 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     error: createCampaignError,
   } = useWriteContract();
 
-  const handleCreateCampaign = (description: string, type: 0 | 1 | 2) => { // Use inline type or CampaignType if exported
+  const handleCreateCampaign = (description: string, type: 0 | 1 | 2) => {
     createCampaignWrite({
       address: CONTRACT_ADDRESSES.aboveBallot,
       abi: ABOVE_BALLOT_ABI,
@@ -346,7 +305,6 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- 2. setCampaignDescription ---
   const {
     writeContract: setCampaignDescriptionWrite,
     isPending: isSettingDescription,
@@ -368,13 +326,14 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- 3. activateCampaign ---
+  // --- CORRECTED: activateCampaign WITH useWaitForTransactionReceipt ---
   const {
     writeContract: activateCampaignWrite,
     isPending: isActivatingCampaign,
-    isSuccess: isActivateCampaignSuccess,
+    isSuccess: isActivateCampaignTxSent, // Renamed for clarity: Tx sent to network
     isError: isActivateCampaignError,
     error: activateCampaignError,
+    data: activateCampaignTxHash, // Get the transaction hash
   } = useWriteContract();
 
   const handleActivateCampaign = () => {
@@ -390,7 +349,32 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- 4. deactivateCampaign ---
+  // Use waitForTransactionReceipt to wait for confirmation
+  const { isSuccess: isActivateCampaignTxConfirmed } = useWaitForTransactionReceipt({
+    hash: activateCampaignTxHash,
+  });
+
+  // Invalidate queries ONLY when the transaction is confirmed on-chain
+  useEffect(() => {
+  if (isActivateCampaignTxConfirmed && campaignId !== null) {
+    console.log(`Campaign ${campaignId.toString()} activation confirmed. Refreshing data.`);
+    queryClient.invalidateQueries({ 
+      queryKey: ['readContract', { 
+        address: CONTRACT_ADDRESSES.aboveBallot, 
+        functionName: 'getCampaign', 
+        args: [campaignId] 
+      }] 
+    });
+    queryClient.invalidateQueries({ 
+      queryKey: ['readContract', { 
+        address: CONTRACT_ADDRESSES.aboveBallot, 
+        functionName: 'getActiveCampaignId' 
+      }] 
+    });
+  }
+}, [isActivateCampaignTxConfirmed, campaignId, queryClient]);
+  // --- END CORRECTED SECTION ---
+
   const {
     writeContract: deactivateCampaignWrite,
     isPending: isDeactivatingCampaign,
@@ -412,7 +396,6 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- 5. setBasicCampaign ---
   const {
     writeContract: setBasicCampaignWrite,
     isPending: isSettingBasicCampaign,
@@ -434,7 +417,6 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- 6. addBallotPosition ---
   const {
     writeContract: addBallotPositionWrite,
     isPending: isAddingBallotPosition,
@@ -456,7 +438,6 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- 7. addCandidate ---
   const {
     writeContract: addCandidateWrite,
     isPending: isAddingCandidate,
@@ -478,13 +459,12 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- NEW: 8. addCandidates (Batch Add Candidates) ---
   const {
     writeContract: addCandidatesWrite,
-    isPending: isAddingCandidates, // <-- This is the new loading state
-    isSuccess: isAddCandidatesSuccess, // <-- This is the new success state
-    isError: isAddCandidatesError, // <-- This is the new error state
-    error: addCandidatesError, // <-- This is the new error object
+    isPending: isAddingCandidates,
+    isSuccess: isAddCandidatesSuccess,
+    isError: isAddCandidatesError,
+    error: addCandidatesError,
   } = useWriteContract();
 
   const handleAddCandidates = (names: string[], positionIndex: bigint) => {
@@ -499,9 +479,7 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
       args: [campaignId, names, positionIndex],
     });
   };
-  // --- END NEW: addCandidates ---
 
-  // --- 9. finalizeBallotSetup ---
   const {
     writeContract: finalizeBallotSetupWrite,
     isPending: isFinalizingBallotSetup,
@@ -523,26 +501,15 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     });
   };
 
-  // --- NEW: 10. endCampaign ---
-  /**
-   * @dev Hook function to trigger the endCampaign transaction on the blockchain.
-   *      Only the campaign creator can call this.
-   * @param campaignIdToFinalize The ID of the campaign to end.
-   */
   const {
     writeContract: endCampaignWrite,
-    isPending: isEndingCampaign, // <-- New loading state
-    isSuccess: isEndCampaignSuccess, // <-- New success state
-    isError: isEndCampaignError, // <-- New error state
-    error: endCampaignError, // <-- New error object
+    isPending: isEndingCampaign,
+    isSuccess: isEndCampaignSuccess,
+    isError: isEndCampaignError,
+    error: endCampaignError,
   } = useWriteContract();
 
-  /**
-   * @dev Handler function to prepare and execute the endCampaign write contract call.
-   * @param campaignIdToFinalize The ID of the campaign to end.
-   */
-  const handleEndCampaign = (campaignIdToFinalize: bigint) => { // Accept campaignId as argument
-    // Use the argument passed to the handler function
+  const handleEndCampaign = (campaignIdToFinalize: bigint) => {
     if (campaignIdToFinalize === null) {
         console.error("Cannot end campaign: campaignId is null");
         return;
@@ -551,23 +518,16 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
       address: CONTRACT_ADDRESSES.aboveBallot,
       abi: ABOVE_BALLOT_ABI,
       functionName: 'endCampaign',
-      args: [campaignIdToFinalize], // Pass the argument received by the handler
+      args: [campaignIdToFinalize],
     });
   };
-  // --- END NEW: endCampaign ---
 
-  // --- END NEW: Campaign Management Functions ---
-
-  // --- Return Values ---
   return {
-    // --- NEW: Owner Data ---
     contractOwner,
     isFetchingOwner,
     isOwnerError,
     ownerError,
-    // --- END NEW ---
 
-    // --- Read data (with defaults) ---
     voterRegistryAddress: voterRegistryAddress ?? '0x0000000000000000000000000000000000000000',
     isFetchingVoterRegistry,
     isVoterRegistryError,
@@ -583,7 +543,7 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isTotalVotesError,
     totalVotesError,
 
-    campaign: campaign ?? null, // Return null if no campaignId provided or campaign not found
+    campaign: campaign ?? null,
     isFetchingCampaign,
     isCampaignError,
     campaignError,
@@ -593,14 +553,12 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isSingleVoteError,
     singleVoteError,
 
-    // Basic Results
     basicChoices,
     basicVotes,
     isFetchingBasicResults,
     isBasicResultsError,
     basicResultsError,
 
-    // Ballot Results
     ballotPositions,
     ballotCandidates,
     ballotCandidateVotes,
@@ -608,14 +566,11 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isBallotResultsError,
     ballotResultsError,
 
-    // --- NEW Global Reads ---
-    nextCampaignId: nextCampaignId ?? 1n, // Default to 1 if not fetched
+    nextCampaignId: nextCampaignId ?? 1n,
     isFetchingNextCampaignId,
     isNextCampaignIdError,
     nextCampaignIdError,
-    // --- END NEW ---
 
-    // --- NEW: Token Data ---
     aboveTokenBalance: aboveTokenBalance ?? 0n,
     isFetchingAboveTokenBalance,
     isAboveTokenBalanceError,
@@ -630,11 +585,7 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isFetchingCampaignCreationFee,
     isCampaignCreationFeeError,
     campaignCreationFeeError,
-    // --- END NEW ---
 
-    // --- Write functions and state ---
-
-    // --- Voting ---
     handleVoteBasic,
     isVotingBasic,
     isVoteBasicSuccess,
@@ -646,17 +597,13 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isVoteBallotSuccess,
     isVoteBallotError,
     voteBallotError,
-    // --- END Voting ---
 
-    // --- NEW: Token Approval ---
     handleApproveAboveTokens,
     isApprovingAboveTokens,
     isApproveAboveTokensSuccess,
     isApproveAboveTokensError,
     approveAboveTokensError,
-    // --- END NEW ---
 
-    // --- Campaign Management Functions and States ---
     handleCreateCampaign,
     isCreatingCampaign,
     isCreateCampaignSuccess,
@@ -671,9 +618,10 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
 
     handleActivateCampaign,
     isActivatingCampaign,
-    isActivateCampaignSuccess,
+    isActivateCampaignTxSent, // Expose if needed for UI
     isActivateCampaignError,
     activateCampaignError,
+    isActivateCampaignTxConfirmed,
 
     handleDeactivateCampaign,
     isDeactivatingCampaign,
@@ -699,13 +647,11 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isAddCandidateError,
     addCandidateError,
 
-    // --- NEW: Batch Add Candidates ---
-    handleAddCandidates, // <-- Export the new handler
-    isAddingCandidates, // <-- Export the new loading state
-    isAddCandidatesSuccess, // <-- Export the new success state
-    isAddCandidatesError, // <-- Export the new error state
-    addCandidatesError, // <-- Export the new error object
-    // --- END NEW ---
+    handleAddCandidates,
+    isAddingCandidates,
+    isAddCandidatesSuccess,
+    isAddCandidatesError,
+    addCandidatesError,
 
     handleFinalizeBallotSetup,
     isFinalizingBallotSetup,
@@ -713,13 +659,16 @@ export const useABOVEBallot = (campaignId: bigint | null) => {
     isFinalizeBallotSetupError,
     finalizeBallotSetupError,
 
-    // --- NEW: End Campaign ---
-    handleEndCampaign, // <-- Export the new handler
-    isEndingCampaign, // <-- Export the new loading state
-    isEndCampaignSuccess, // <-- Export the new success state
-    isEndCampaignError, // <-- Export the new error state
-    endCampaignError, // <-- Export the new error object
-    // --- END NEW ---
-    // --- END Campaign Management ---
+    handleEndCampaign,
+    isEndingCampaign,
+    isEndCampaignSuccess,
+    isEndCampaignError,
+    endCampaignError,
+    
+    activeCampaignId,
+    isFetchingActiveCampaignId,
+    isActiveCampaignIdError,
+    activeCampaignIdError,
+    
   };
 };
